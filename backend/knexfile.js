@@ -33,7 +33,7 @@ module.exports = {
     client: 'mysql2',
     connection: {
       ...baseConnection,
-      database: (process.env.DB_NAME || 'primeroute') + '_test'
+      database: process.env.DB_NAME || 'prime_route'
     },
     pool: {
       min: 1,
@@ -42,9 +42,6 @@ module.exports = {
     migrations: {
       directory: path.join(__dirname, 'db', 'migrations'),
       tableName: 'knex_migrations'
-    },
-    seeds: {
-      directory: path.join(__dirname, 'db', 'seeds')
     }
   },
 

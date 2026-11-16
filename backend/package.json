@@ -5,13 +5,18 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
+    "build": "prisma generate",
     "start": "node src/server.js",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "seed": "knex seed:run",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "prisma:pull": "prisma db pull",
     "test": "jest --detectOpenHandles --forceExit"
   },
   "dependencies": {
+    "@prisma/client": "^6.4.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -34,6 +39,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.1.9",
+    "prisma": "^6.4.1",
     "supertest": "^7.0.0"
   }
 }

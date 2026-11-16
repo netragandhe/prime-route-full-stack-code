@@ -13,6 +13,7 @@ const envSchema = z.object({
   DB_USER: z.string().min(1, 'DB_USER is required'),
   DB_PASSWORD: z.string().default(''),
   DB_NAME: z.string().min(1, 'DB_NAME is required').default('primeroute'),
+  DATABASE_URL: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().min(10, 'JWT_ACCESS_SECRET must be at least 10 characters'),
   JWT_REFRESH_SECRET: z.string().min(10, 'JWT_REFRESH_SECRET must be at least 10 characters'),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
