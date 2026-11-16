@@ -113,19 +113,50 @@ export const findUserByEmail = (emailStr) => {
   return null;
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
 export const authenticate = async (email, password) => {
-  await delay(100);
-  const user = findUserByEmail(email);
-  if (!user) {
-    throw new ApiError('No corporate account found for this email address.', 404);
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      const errorMsg = data?.error?.message || 'Authentication failed. Please verify corporate credentials.';
+      throw new ApiError(errorMsg, response.status);
+    }
+
+    const { accessToken, refreshToken, user } = data.data;
+
+    // Persist JWT session tokens
+    if (accessToken) {
+      localStorage.setItem('primeroute_access_token', accessToken);
+    }
+    if (refreshToken) {
+      localStorage.setItem('primeroute_refresh_token', refreshToken);
+    }
+    if (user) {
+      localStorage.setItem('primeroute_current_user', JSON.stringify(user));
+      localStorage.setItem('primeroute_active_role', user.role);
+    }
+
+    return user;
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    // Fallback if backend server is completely unreachable
+    throw new ApiError(
+      err.message || 'Cannot connect to authentication server. Please check backend status.',
+      503
+    );
   }
-  if (user.status && user.status.toLowerCase() !== 'active') {
-    throw new ApiError('Account is inactive. Please contact your system administrator.', 403);
-  }
-  if (user.password && password && user.password !== password) {
-    throw new ApiError('Invalid password. Please verify your corporate credentials.', 401);
-  }
-  return user;
 };
 
 export const authApi = {

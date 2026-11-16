@@ -149,7 +149,16 @@ function AppContent({ onLogoutConfirm }) {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      return Boolean(
+        localStorage.getItem('primeroute_access_token') ||
+        localStorage.getItem('primeroute_active_role')
+      );
+    } catch {
+      return false;
+    }
+  });
 
   const handleLogin = (roleId) => {
     if (roleId) {
@@ -166,6 +175,18 @@ export default function App() {
     setIsAuthenticated(true);
   };
 
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('primeroute_access_token');
+      localStorage.removeItem('primeroute_refresh_token');
+      localStorage.removeItem('primeroute_current_user');
+      localStorage.removeItem('primeroute_active_role');
+    } catch {
+      // ignore
+    }
+    setIsAuthenticated(false);
+  };
+
   if (!isAuthenticated) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -174,7 +195,7 @@ export default function App() {
     <RoleProvider>
       <FleetProvider>
         <ErrorBoundary>
-          <AppContent onLogoutConfirm={() => setIsAuthenticated(false)} />
+          <AppContent onLogoutConfirm={handleLogout} />
         </ErrorBoundary>
       </FleetProvider>
     </RoleProvider>

@@ -19,6 +19,8 @@ export default function DashboardFilters({
   setSelectedCategoryFilter,
   isFiltered,
   onResetFilters,
+  vehicles = [],
+  drivers = []
 }) {
   return (
     <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)]">
@@ -48,12 +50,10 @@ export default function DashboardFilters({
             onChange={(e) => setSelectedVehicleFilter(e.target.value)}
             className="w-full bg-transparent font-semibold text-slate-700 focus:outline-hidden cursor-pointer pr-5 appearance-none text-xs"
           >
-            <option>All 65 Vehicles</option>
-            <option>Toyota Camry SE</option>
-            <option>Tesla Model 3</option>
-            <option>Honda Accord Sport</option>
-            <option>Chevrolet Tahoe</option>
-            <option>Ford F-150 Lariat</option>
+            <option>All {vehicles.length > 0 ? `${vehicles.length} Vehicle${vehicles.length > 1 ? 's' : ''}` : 'Vehicles'}</option>
+            {vehicles.map((v) => (
+              <option key={v.id || v.plate} value={v.name}>{v.name}</option>
+            ))}
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 pointer-events-none" />
         </div>
@@ -66,12 +66,10 @@ export default function DashboardFilters({
             onChange={(e) => setSelectedDriverFilter(e.target.value)}
             className="w-full bg-transparent font-semibold text-slate-700 focus:outline-hidden cursor-pointer pr-5 appearance-none text-xs"
           >
-            <option>All 48 Drivers</option>
-            <option>Sarah Jenkins</option>
-            <option>Marcus Vance</option>
-            <option>David Miller</option>
-            <option>Michael Chang</option>
-            <option>Elena Rostova</option>
+            <option>All {drivers.length > 0 ? `${drivers.length} Driver${drivers.length > 1 ? 's' : ''}` : 'Drivers'}</option>
+            {drivers.map((d) => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 pointer-events-none" />
         </div>
@@ -85,11 +83,9 @@ export default function DashboardFilters({
             className="w-full bg-transparent font-semibold text-slate-700 focus:outline-hidden cursor-pointer pr-5 appearance-none text-xs"
           >
             <option>All Categories</option>
-            <option>Sedan (28)</option>
-            <option>SUV (18)</option>
-            <option>Electric (10)</option>
-            <option>Luxury (5)</option>
-            <option>Truck (4)</option>
+            {[...new Set(vehicles.map((v) => v.type).filter(Boolean))].map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 pointer-events-none" />
         </div>

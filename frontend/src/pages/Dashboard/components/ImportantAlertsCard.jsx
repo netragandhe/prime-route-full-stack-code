@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { usePermission } from '../../../auth/usePermission';
 
-export default function ImportantAlertsCard({ onNavigate }) {
+export default function ImportantAlertsCard({ onNavigate, alerts: propAlerts }) {
   const canRentals = usePermission('rentals', 'view').can;
   const canMaintenance = usePermission('maintenance', 'view').can;
   const canTolls = usePermission('tolls-tickets', 'view').can;
@@ -107,7 +107,22 @@ export default function ImportantAlertsCard({ onNavigate }) {
     },
   ];
 
-  const visibleAlerts = allAlerts.filter((a) => a.visible);
+  const dynamicAlerts = propAlerts && Array.isArray(propAlerts)
+    ? propAlerts.map((a) => ({
+        id: `alert-${a.id}`,
+        title: a.title,
+        badge: a.badge || 'Expiring',
+        module: 'rentals',
+        link: 'rentals',
+        icon: a.severity === 'danger' ? Calendar : a.severity === 'warning' ? Wrench : Bell,
+        iconColor: a.severity === 'danger' ? 'text-rose-600' : 'text-amber-600',
+        bgColor: a.severity === 'danger' ? 'bg-rose-50' : 'bg-amber-50',
+        badgeColor: a.severity === 'danger' ? 'text-rose-600' : 'text-amber-600',
+        visible: true,
+      }))
+    : allAlerts;
+
+  const visibleAlerts = dynamicAlerts.filter((a) => a.visible);
 
   return (
     <div className="h-[340px] bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] hover:shadow-card-hover transition-all duration-300 flex flex-col overflow-hidden">

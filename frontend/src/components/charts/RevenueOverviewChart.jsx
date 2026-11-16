@@ -11,9 +11,10 @@ import {
 import { TrendingUp } from 'lucide-react';
 import { revenueOverviewData } from '../../data/mockData';
 
-export default function RevenueOverviewChart() {
+export default function RevenueOverviewChart({ data: propData }) {
   const [timeframe, setTimeframe] = useState('This Month');
-  const data = revenueOverviewData[timeframe] || revenueOverviewData['This Month'];
+  const sourceData = propData || revenueOverviewData;
+  const data = sourceData[timeframe] || sourceData['This Month'] || [];
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {

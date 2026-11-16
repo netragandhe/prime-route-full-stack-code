@@ -1,58 +1,75 @@
-import { delay, getCachedOrInit, setCached, ApiError } from './client';
-import { initialDrivers } from '../data/mockData';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-const CACHE_KEY = 'prime_route_drivers';
+function getAuthHeaders() {
+  const token = localStorage.getItem('primeroute_access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
 
 export const driversApi = {
   async getDrivers() {
-    await delay();
-    return [...getCachedOrInit(CACHE_KEY, () => [...initialDrivers])];
+    const res = await fetch(`${API_BASE_URL}/drivers`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to fetch drivers from database');
+    }
+    return json.data;
   },
 
   async getDriverById(id) {
-    await delay();
-    const drivers = getCachedOrInit(CACHE_KEY, () => [...initialDrivers]);
-    const driver = drivers.find((d) => d.id === id || d.name === id);
-    if (!driver) throw new ApiError(`Driver with ID "${id}" not found`, 404);
-    return { ...driver };
+    const res = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || `Driver with ID "${id}" not found`);
+    }
+    return json.data;
   },
 
   async createDriver(driverData) {
-    await delay();
-    const drivers = getCachedOrInit(CACHE_KEY, () => [...initialDrivers]);
-
-    const newDriver = {
-      id: driverData.id || `DRV-${String(drivers.length + 101)}`,
-      status: 'Active',
-      balance: '$0',
-      tripsCompleted: 0,
-      ...driverData,
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = [newDriver, ...drivers];
-    setCached(CACHE_KEY, updated);
-    return { ...newDriver };
+    const res = await fetch(`${API_BASE_URL}/drivers`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(driverData)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to create driver');
+    }
+    return json.data;
   },
 
   async updateDriver(id, updates) {
-    await delay();
-    const drivers = getCachedOrInit(CACHE_KEY, () => [...initialDrivers]);
-    const index = drivers.findIndex((d) => d.id === id || d.name === id);
-    if (index === -1) throw new ApiError(`Driver with ID "${id}" not found`, 404);
-
-    const updatedDriver = { ...drivers[index], ...updates, updatedAt: new Date().toISOString() };
-    drivers[index] = updatedDriver;
-    setCached(CACHE_KEY, [...drivers]);
-    return { ...updatedDriver };
+    const res = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to update driver');
+    }
+    return json.data;
   },
 
   async deleteDriver(id) {
-    await delay();
-    const drivers = getCachedOrInit(CACHE_KEY, () => [...initialDrivers]);
-    const filtered = drivers.filter((d) => d.id !== id && d.name !== id);
-    setCached(CACHE_KEY, filtered);
-    return { success: true };
+    const res = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to delete driver');
+    }
+    return json.data;
   }
 };
 
+export default driversApi;

@@ -1,66 +1,75 @@
-import { delay, getCachedOrInit, setCached, ApiError } from './client';
-import { initialVehicles } from '../data/mockData';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-const CACHE_KEY = 'prime_route_vehicles';
+function getAuthHeaders() {
+  const token = localStorage.getItem('primeroute_access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
 
 export const vehiclesApi = {
   async getVehicles() {
-    await delay();
-    return [...getCachedOrInit(CACHE_KEY, () => [...initialVehicles])];
+    const res = await fetch(`${API_BASE_URL}/vehicles`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to fetch vehicles from database');
+    }
+    return json.data;
   },
 
   async getVehicleById(id) {
-    await delay();
-    const vehicles = getCachedOrInit(CACHE_KEY, () => [...initialVehicles]);
-    const vehicle = vehicles.find((v) => v.id === id || v.plate === id);
-    if (!vehicle) throw new ApiError(`Vehicle with ID "${id}" not found`, 404);
-    return { ...vehicle };
+    const res = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || `Vehicle with ID "${id}" not found`);
+    }
+    return json.data;
   },
 
   async createVehicle(vehicleData) {
-    await delay();
-    const vehicles = getCachedOrInit(CACHE_KEY, () => [...initialVehicles]);
-
-    // Check duplicate VIN
-    if (vehicleData.vin) {
-      const isDuplicate = vehicles.some(
-        (v) => v.vin?.toLowerCase().trim() === vehicleData.vin.toLowerCase().trim()
-      );
-      if (isDuplicate) {
-        throw new ApiError(`Duplicate VIN: Vehicle with VIN "${vehicleData.vin}" already exists.`, 409);
-      }
+    const res = await fetch(`${API_BASE_URL}/vehicles`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(vehicleData)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to create vehicle');
     }
-
-    const newVehicle = {
-      id: vehicleData.id || `VEH-${String(vehicles.length + 1).padStart(3, '0')}`,
-      status: 'Available',
-      ...vehicleData,
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = [newVehicle, ...vehicles];
-    setCached(CACHE_KEY, updated);
-    return { ...newVehicle };
+    return json.data;
   },
 
   async updateVehicle(id, updates) {
-    await delay();
-    const vehicles = getCachedOrInit(CACHE_KEY, () => [...initialVehicles]);
-    const index = vehicles.findIndex((v) => v.id === id || v.plate === id);
-    if (index === -1) throw new ApiError(`Vehicle with ID "${id}" not found`, 404);
-
-    const updatedVehicle = { ...vehicles[index], ...updates, updatedAt: new Date().toISOString() };
-    vehicles[index] = updatedVehicle;
-    setCached(CACHE_KEY, [...vehicles]);
-    return { ...updatedVehicle };
+    const res = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to update vehicle');
+    }
+    return json.data;
   },
 
   async deleteVehicle(id) {
-    await delay();
-    const vehicles = getCachedOrInit(CACHE_KEY, () => [...initialVehicles]);
-    const filtered = vehicles.filter((v) => v.id !== id && v.plate !== id);
-    setCached(CACHE_KEY, filtered);
-    return { success: true };
+    const res = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to delete vehicle');
+    }
+    return json.data;
   }
 };
 
+export default vehiclesApi;

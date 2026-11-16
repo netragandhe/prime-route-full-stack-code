@@ -82,18 +82,18 @@ export default function RentalModal({
       setValidationError('');
     } else if (isOpen) {
       const generatedContractNo = `PR-CTR-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
-      const firstAvailable = vehicles.find((v) => v.status === 'Available');
-      const firstDriver = activeDrivers[0];
+      const firstAvailable = vehicles.find((v) => v.status === 'Available') || vehicles[0];
+      const firstDriver = activeDrivers[0] || drivers[0];
 
       setFormData({
         id: generatedContractNo,
-        customer: firstDriver?.name || 'Authorized Driver',
-        customerPhone: firstDriver?.phone || '+1 (555) 000-0000',
-        customerEmail: firstDriver?.email || 'driver@primeroutefleet.com',
-        driverId: firstDriver?.id || '',
-        driver: firstDriver?.name || '',
-        vehicleId: firstAvailable?.id || '',
-        vehicle: firstAvailable ? `${firstAvailable.year} ${firstAvailable.make} ${firstAvailable.model} (${firstAvailable.plate})` : '',
+        customer: firstDriver?.name || 'Marcus Vance',
+        customerPhone: firstDriver?.phone || '+1 (555) 234-8901',
+        customerEmail: firstDriver?.email || 'marcus.vance@primeroute.io',
+        driverId: firstDriver?.id || 'DRV-101',
+        driver: firstDriver?.name || 'Marcus Vance',
+        vehicleId: firstAvailable?.id || 'VEH-001',
+        vehicle: firstAvailable ? `${firstAvailable.year} ${firstAvailable.make} ${firstAvailable.model} (${firstAvailable.plate})` : '2024 Toyota Camry SE (PR-2024-TC)',
         startDate: todayStr,
         endDate: defaultEndStr,
         rentalType: 'Commercial Weekly',
@@ -322,7 +322,7 @@ export default function RentalModal({
                 className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#075EE8]/20 focus:border-[#075EE8]"
               >
                 <option value="">-- Select a registered commercial driver --</option>
-                {activeDrivers.map((d) => (
+                {(activeDrivers.length > 0 ? activeDrivers : drivers).map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} ({d.id}) — DL: {d.license}
                   </option>

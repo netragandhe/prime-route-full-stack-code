@@ -17,11 +17,11 @@ import {
 const FleetContext = createContext(null);
 
 export function FleetProvider({ children }) {
-  const [rentals, setRentals] = useState(initialRentals);
-  const [vehicles, setVehicles] = useState(initialVehicles);
-  const [drivers, setDrivers] = useState(initialDrivers);
-  const [inspections, setInspections] = useState(initialInspections);
-  const [accidents, setAccidents] = useState(initialAccidents);
+  const [rentals, setRentals] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [inspections, setInspections] = useState([]);
+  const [accidents, setAccidents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,20 +31,16 @@ export function FleetProvider({ children }) {
     async function loadData() {
       try {
         setIsLoading(true);
-        const [vList, dList, rList, insList, accList] = await Promise.all([
-          vehiclesApi.getVehicles(),
-          driversApi.getDrivers(),
-          rentalsApi.getRentals(),
-          inspectionsApi.getInspections(),
-          inspectionsApi.getAccidents()
+        const [vList, dList, rList] = await Promise.all([
+          vehiclesApi.getVehicles().catch(() => []),
+          driversApi.getDrivers().catch(() => []),
+          rentalsApi.getRentals().catch(() => [])
         ]);
 
         if (isMounted) {
-          if (vList?.length) setVehicles(vList);
-          if (dList?.length) setDrivers(dList);
-          if (rList?.length) setRentals(rList);
-          if (insList?.length) setInspections(insList);
-          if (accList?.length) setAccidents(accList);
+          if (Array.isArray(vList)) setVehicles(vList);
+          if (Array.isArray(dList)) setDrivers(dList);
+          if (Array.isArray(rList)) setRentals(rList);
           setError(null);
         }
       } catch (err) {

@@ -1,74 +1,75 @@
-import { delay, getCachedOrInit, setCached, ApiError } from './client';
-import { initialRentals } from '../data/mockData';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-const CACHE_KEY = 'prime_route_rentals';
+function getAuthHeaders() {
+  const token = localStorage.getItem('primeroute_access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
 
 export const rentalsApi = {
   async getRentals() {
-    await delay();
-    return [...getCachedOrInit(CACHE_KEY, () => [...initialRentals])];
+    const res = await fetch(`${API_BASE_URL}/rentals`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to fetch rentals from database');
+    }
+    return json.data;
   },
 
   async getRentalById(id) {
-    await delay();
-    const rentals = getCachedOrInit(CACHE_KEY, () => [...initialRentals]);
-    const rental = rentals.find((r) => r.id === id);
-    if (!rental) throw new ApiError(`Rental contract "${id}" not found`, 404);
-    return { ...rental };
+    const res = await fetch(`${API_BASE_URL}/rentals/${id}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || `Rental contract with ID "${id}" not found`);
+    }
+    return json.data;
   },
 
   async createRental(rentalData) {
-    await delay();
-    const rentals = getCachedOrInit(CACHE_KEY, () => [...initialRentals]);
-
-    // Check overlapping active rental for same vehicle
-    if (rentalData.vehicleId || rentalData.vehicle) {
-      const targetVeh = rentalData.vehicleId || rentalData.vehicle;
-      const hasConflict = rentals.some((r) => {
-        if (r.status !== 'Active') return false;
-        const matchesVeh = (r.vehicleId && r.vehicleId === targetVeh) || r.vehicle === targetVeh;
-        return matchesVeh;
-      });
-
-      if (hasConflict) {
-        throw new ApiError(
-          `Overlapping Rental Conflict: Vehicle "${rentalData.vehicle}" is currently assigned to an ongoing active rental.`,
-          409
-        );
-      }
+    const res = await fetch(`${API_BASE_URL}/rentals`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(rentalData)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to create rental');
     }
-
-    const newRental = {
-      id: rentalData.id || `RNT-${String(rentals.length + 1).padStart(4, '0')}`,
-      status: rentalData.status || 'Active',
-      paymentStatus: rentalData.paymentStatus || 'Pending',
-      createdAt: new Date().toISOString(),
-      ...rentalData
-    };
-
-    const updated = [newRental, ...rentals];
-    setCached(CACHE_KEY, updated);
-    return { ...newRental };
+    return json.data;
   },
 
   async updateRental(id, updates) {
-    await delay();
-    const rentals = getCachedOrInit(CACHE_KEY, () => [...initialRentals]);
-    const index = rentals.findIndex((r) => r.id === id);
-    if (index === -1) throw new ApiError(`Rental "${id}" not found`, 404);
-
-    const updatedRental = { ...rentals[index], ...updates, updatedAt: new Date().toISOString() };
-    rentals[index] = updatedRental;
-    setCached(CACHE_KEY, [...rentals]);
-    return { ...updatedRental };
+    const res = await fetch(`${API_BASE_URL}/rentals/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to update rental');
+    }
+    return json.data;
   },
 
   async deleteRental(id) {
-    await delay();
-    const rentals = getCachedOrInit(CACHE_KEY, () => [...initialRentals]);
-    const filtered = rentals.filter((r) => r.id !== id);
-    setCached(CACHE_KEY, filtered);
-    return { success: true };
+    const res = await fetch(`${API_BASE_URL}/rentals/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json?.error?.message || 'Failed to terminate rental');
+    }
+    return json.data;
   }
 };
 
+export default rentalsApi;

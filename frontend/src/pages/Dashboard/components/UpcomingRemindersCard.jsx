@@ -2,7 +2,7 @@ import React from 'react';
 import { Clock, Wrench, Shield, FileSpreadsheet, ArrowRight, ChevronRight } from 'lucide-react';
 import { usePermission } from '../../../auth/usePermission';
 
-export default function UpcomingRemindersCard({ onNavigate }) {
+export default function UpcomingRemindersCard({ onNavigate, reminders: propReminders }) {
   const canMaintenance = usePermission('maintenance', 'view').can;
   const canDocuments = usePermission('documents', 'view').can;
   const canRentals = usePermission('rentals', 'view').can;
@@ -58,7 +58,22 @@ export default function UpcomingRemindersCard({ onNavigate }) {
     },
   ];
 
-  const visibleReminders = reminders.filter((r) => r.visible);
+  const dynamicReminders = propReminders && Array.isArray(propReminders)
+    ? propReminders.map((r) => ({
+        id: `rem-${r.id}`,
+        title: r.vehicle,
+        subtitle: r.description,
+        category: r.category,
+        date: r.date,
+        isUrgent: r.urgency === 'high',
+        icon: FileSpreadsheet,
+        categoryColor: 'bg-purple-50 text-purple-700 border-purple-200',
+        link: 'rentals',
+        visible: true,
+      }))
+    : reminders;
+
+  const visibleReminders = dynamicReminders.filter((r) => r.visible);
 
   return (
     <div className="bg-white rounded-2xl p-4 xl:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] hover:shadow-card-hover transition-all duration-300 flex flex-col justify-between h-full">

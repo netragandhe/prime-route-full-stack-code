@@ -10,8 +10,10 @@ import {
 import { DollarSign, ArrowUpRight } from 'lucide-react';
 import { financialSummaryData } from '../../data/mockData';
 
-export default function FinancialBarChart() {
+export default function FinancialBarChart({ data: propData }) {
   const [selectedYear, setSelectedYear] = useState('This Year');
+  const summary = propData || financialSummaryData;
+  const bars = summary.monthlyBars || financialSummaryData.monthlyBars;
 
   return (
     <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] h-full flex flex-col justify-between">
@@ -44,7 +46,7 @@ export default function FinancialBarChart() {
         {/* Bars */}
         <div className="lg:col-span-8 h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={financialSummaryData.monthlyBars} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+            <BarChart data={bars} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
               <XAxis
                 dataKey="month"
                 axisLine={false}
@@ -81,7 +83,7 @@ export default function FinancialBarChart() {
               Total Revenue
             </div>
             <div className="text-base font-extrabold text-[#0A1E42] mt-0.5">
-              ${financialSummaryData.totalRevenue.toLocaleString()}
+              ${(summary.totalRevenue || 0).toLocaleString()}
             </div>
           </div>
 
@@ -91,7 +93,7 @@ export default function FinancialBarChart() {
               Total Expenses
             </div>
             <div className="text-base font-extrabold text-[#0A1E42] mt-0.5">
-              ${financialSummaryData.totalExpenses.toLocaleString()}
+              ${(summary.totalExpenses || 0).toLocaleString()}
             </div>
           </div>
 
@@ -99,11 +101,11 @@ export default function FinancialBarChart() {
             <div className="text-xs text-slate-500 font-medium">Net Profit</div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-base font-extrabold text-[#0A1E42]">
-                ${financialSummaryData.netProfit.toLocaleString()}
+                ${(summary.netProfit || 0).toLocaleString()}
               </span>
               <span className="inline-flex items-center text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
                 <ArrowUpRight className="w-3 h-3 mr-0.5" />
-                {financialSummaryData.profitGrowth}
+                {summary.profitMarginChange || summary.profitGrowth || '+100%'}
               </span>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import RevenueOverviewChart from '../../components/charts/RevenueOverviewChart';
 import FleetStatusChart from '../../components/charts/FleetStatusChart';
 import FinancialBarChart from '../../components/charts/FinancialBarChart';
@@ -9,6 +9,7 @@ import FleetUtilizationGauge from './components/FleetUtilizationGauge';
 import UpcomingRemindersCard from './components/UpcomingRemindersCard';
 import ImportantAlertsCard from './components/ImportantAlertsCard';
 import TopVehiclesCard from './components/TopVehiclesCard';
+import { dashboardApi } from '../../api';
 
 // Quick action modals from existing pages
 import RentalModal from '../Rentals/RentalModal';
@@ -33,7 +34,7 @@ const defaultFleetStatusData = [
 ];
 
 export default function DashboardPage({ onNavigate, onViewVehicle }) {
-  const { saveRental } = useFleet();
+  const { vehicles = [], drivers = [], saveRental } = useFleet();
 
   // Role permissions
   const canVehicles = usePermission('vehicles', 'view').can;
@@ -44,9 +45,40 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
 
   // Filter States
   const [dateRange, setDateRange] = useState('This Month (July 2025)');
-  const [selectedVehicleFilter, setSelectedVehicleFilter] = useState('All 65 Vehicles');
-  const [selectedDriverFilter, setSelectedDriverFilter] = useState('All 48 Drivers');
+  const [selectedVehicleFilter, setSelectedVehicleFilter] = useState('All Vehicles');
+  const [selectedDriverFilter, setSelectedDriverFilter] = useState('All Drivers');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All Categories');
+
+  // Live Database State
+  const [dbDashboardData, setDbDashboardData] = useState(null);
+  const [isDbLoading, setIsDbLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLiveDashboardFromDB() {
+      try {
+        setIsDbLoading(true);
+        const liveData = await dashboardApi.getDashboardData({
+          dateRange,
+          vehicleFilter: selectedVehicleFilter,
+          driverFilter: selectedDriverFilter,
+          categoryFilter: selectedCategoryFilter
+        });
+        if (isMounted && liveData) {
+          setDbDashboardData(liveData);
+        }
+      } catch (err) {
+        console.error('Error fetching live database metrics:', err);
+      } finally {
+        if (isMounted) setIsDbLoading(false);
+      }
+    }
+
+    loadLiveDashboardFromDB();
+    return () => {
+      isMounted = false;
+    };
+  }, [dateRange, selectedVehicleFilter, selectedDriverFilter, selectedCategoryFilter]);
 
   // Quick Action Modal States
   const [isRentalModalOpen, setIsRentalModalOpen] = useState(false);
@@ -542,6 +574,10 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
     return topVehicles;
   }, [selectedVehicleFilter, selectedCategoryFilter]);
 
+  const liveStats = dbDashboardData?.kpis || filteredStats;
+  const liveFleetStatus = dbDashboardData?.fleetStatus || filteredFleetStatus;
+  const liveTopVehicles = dbDashboardData?.topVehicles || displayedTopVehicles;
+
   return (
     <div className="space-y-4 sm:space-y-5 animate-slide-up duration-300">
       {/* Global Dashboard Multi-Parameter Filters */}
@@ -556,6 +592,8 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
         setSelectedCategoryFilter={setSelectedCategoryFilter}
         isFiltered={isFiltered}
         onResetFilters={handleResetFilters}
+        vehicles={vehicles}
+        drivers={drivers}
       />
 
       {/* Quick Action Buttons (Opens Modals) */}
@@ -568,7 +606,7 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
 
       {/* 6 KPI Cards with Trend Indicators (No orphan cards on 360px mobile) */}
       <DashboardKpis
-        filteredStats={filteredStats}
+        filteredStats={liveStats}
         onNavigate={onNavigate}
       />
 
@@ -577,7 +615,7 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
         {/* Revenue vs Expenses Line Chart */}
         {canAccounting && (
           <div className="lg:col-span-6 h-[340px] transition-all duration-300 hover:shadow-card-hover rounded-2xl">
-            <RevenueOverviewChart />
+            <RevenueOverviewChart data={dbDashboardData?.revenueOverview} />
           </div>
         )}
 
@@ -588,7 +626,7 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
               canAccounting ? 'lg:col-span-3' : 'lg:col-span-6'
             } h-[340px] transition-all duration-300 hover:shadow-card-hover rounded-2xl`}
           >
-            <FleetStatusChart data={filteredFleetStatus} />
+            <FleetStatusChart data={liveFleetStatus} />
           </div>
         )}
 
@@ -600,9 +638,9 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
             } h-[340px] transition-all duration-300 hover:shadow-card-hover rounded-2xl`}
           >
             <FleetUtilizationGauge
-              utilizationRate={filteredStats.utilizationRate ?? 65}
-              activeCount={filteredStats.activeRentals ?? 42}
-              totalCount={filteredStats.totalVehicles ?? 65}
+              utilizationRate={liveStats.utilizationRate ?? 100}
+              activeCount={liveStats.activeRentals ?? 1}
+              totalCount={liveStats.totalVehicles ?? 1}
               targetRate={85}
             />
           </div>
@@ -613,13 +651,13 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 xl:gap-5">
         {/* Important Alerts Card */}
         <div className="lg:col-span-4">
-          <ImportantAlertsCard onNavigate={onNavigate} />
+          <ImportantAlertsCard onNavigate={onNavigate} alerts={dbDashboardData?.alerts} />
         </div>
 
         {/* Upcoming Reminders (Oil changes, Insurance renewal, Contract expiry) */}
         {(canMaintenance || canDocuments || canRentals) && (
           <div className="lg:col-span-4">
-            <UpcomingRemindersCard onNavigate={onNavigate} />
+            <UpcomingRemindersCard onNavigate={onNavigate} reminders={dbDashboardData?.reminders} />
           </div>
         )}
 
@@ -627,7 +665,7 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
         {(canVehicles || canAccounting) && (
           <div className="lg:col-span-4">
             <TopVehiclesCard
-              displayedTopVehicles={displayedTopVehicles}
+              displayedTopVehicles={liveTopVehicles}
               onNavigate={onNavigate}
               onViewVehicle={onViewVehicle}
             />
@@ -638,7 +676,7 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
       {/* Row 3: Financial Summary Bar Chart & Statistics */}
       {canAccounting && (
         <div className="transition-all duration-300 hover:shadow-card-hover rounded-2xl">
-          <FinancialBarChart />
+          <FinancialBarChart data={dbDashboardData?.financialSummary} />
         </div>
       )}
 
