@@ -38,8 +38,8 @@ async function updateRental(req, res, next) {
 
 async function terminateRental(req, res, next) {
   try {
-    await rentalsService.terminateRental(req.params.id);
-    return res.status(200).json({ success: true, data: { message: 'Rental terminated' } });
+    const result = await rentalsService.deleteRental(req.params.id);
+    return res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

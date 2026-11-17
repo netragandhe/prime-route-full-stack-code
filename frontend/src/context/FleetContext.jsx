@@ -138,6 +138,16 @@ export function FleetProvider({ children }) {
     );
   }, []);
 
+  const deleteRental = useCallback((rentalId) => {
+    setRentals((prev) => prev.filter((r) => r.id !== rentalId));
+    rentalsApi.deleteRental(rentalId).catch(console.error);
+    auditApi.appendAuditLog({
+      action: 'Rental Contract Removed',
+      module: 'Rentals',
+      details: `Rental contract ${rentalId} permanently removed from database.`
+    });
+  }, []);
+
   // Helper: Add inspection record (e.g. check-out pickup or check-in return)
   const addInspection = useCallback((inspectionData) => {
     setInspections((prev) => [inspectionData, ...prev]);
@@ -208,6 +218,7 @@ export function FleetProvider({ children }) {
       setRentals,
       saveRental,
       updateRental,
+      deleteRental,
       vehicles,
       setVehicles,
       updateVehicleStatus,
@@ -233,6 +244,7 @@ export function FleetProvider({ children }) {
       accidents,
       saveRental,
       updateRental,
+      deleteRental,
       updateVehicleStatus,
       updateDriverVehicle,
       addInspection,
@@ -256,6 +268,7 @@ export function useFleet() {
       setRentals: () => {},
       saveRental: () => {},
       updateRental: () => {},
+      deleteRental: () => {},
       vehicles: initialVehicles,
       setVehicles: () => {},
       updateVehicleStatus: () => {},
