@@ -25,17 +25,17 @@ export default function DriverModal({
     name: '',
     phone: '',
     email: '',
-    address: '142 W 57th St, New York, NY 10019',
+    address: '',
     license: '',
     licenseState: 'NY',
-    licenseExpiry: '2026-09-14',
+    licenseExpiry: '',
     status: 'Active',
-    startDate: '2024-01-15',
-    joiningDate: '2024-01-15',
-    dob: '1990-05-14',
-    emergencyContact: 'Rachel Vance (+1 555-901-2244)',
+    startDate: new Date().toISOString().split('T')[0],
+    joiningDate: new Date().toISOString().split('T')[0],
+    dob: '',
+    emergencyContact: '',
     vehicle: 'Unassigned',
-    salaryRate: '$2,400/mo',
+    salaryRate: '',
     balance: 0,
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
     notes: '',
@@ -49,11 +49,11 @@ export default function DriverModal({
       setFormData({
         ...defaultForm,
         ...driver,
-        startDate: driver.startDate || driver.joiningDate || '2024-01-15',
-        joiningDate: driver.joiningDate || driver.startDate || '2024-01-15',
+        startDate: driver.startDate || driver.joiningDate || new Date().toISOString().split('T')[0],
+        joiningDate: driver.joiningDate || driver.startDate || new Date().toISOString().split('T')[0],
         licenseState: driver.licenseState || 'NY',
-        licenseExpiry: driver.licenseExpiry || '2026-09-14',
-        emergencyContact: driver.emergencyContact || 'Emergency Contact (+1 555-000-0000)',
+        licenseExpiry: driver.licenseExpiry || '',
+        emergencyContact: driver.emergencyContact || '',
       });
       setErrors({});
     } else if (isOpen) {
@@ -66,10 +66,6 @@ export default function DriverModal({
       setFormData({
         ...defaultForm,
         id: `DRV-${nextNum}`,
-        name: 'Jordan Miller',
-        phone: '+1 (555) 345-6712',
-        email: `driver${nextNum}@primeroute.fleet`,
-        license: `DL-NY-84920${nextNum % 100}`,
       });
       setErrors({});
     }

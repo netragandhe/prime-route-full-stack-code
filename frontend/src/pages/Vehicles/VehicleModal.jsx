@@ -58,32 +58,32 @@ export default function VehicleModal({
 
   const defaultForm = {
     id: '',
-    name: 'Toyota Camry SE',
-    plate: 'PR-2025-09',
-    make: 'Toyota',
-    model: 'Camry SE',
-    year: 2024,
-    color: 'Midnight Blue',
-    mileage: '18,500 mi',
+    name: '',
+    plate: '',
+    make: '',
+    model: '',
+    year: new Date().getFullYear(),
+    color: '',
+    mileage: '',
     vin: '',
-    purchaseDate: '2024-01-15',
-    purchasePrice: 28500,
+    purchaseDate: new Date().toISOString().split('T')[0],
+    purchasePrice: '',
     financingType: 'Financed (Bank Loan)',
-    lenderName: 'Chase Commercial Fleet Financing',
-    loanAmount: 24000,
-    monthlyPayment: 460,
-    loanTermMonths: 48,
+    lenderName: '',
+    loanAmount: '',
+    monthlyPayment: '',
+    loanTermMonths: '',
     status: 'Available',
     location: 'JFK Airport Fleet Hub',
     depotLocation: 'JFK Airport Fleet Hub',
     driver: 'Unassigned',
-    dailyRate: 65,
+    dailyRate: '',
     type: 'Sedan',
     fuel: 'Gasoline',
     transmission: 'Automatic',
-    insuranceExpiry: '2025-11-30',
-    registrationExpiry: '2025-10-31',
-    image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=400&auto=format&fit=crop&q=80',
+    insuranceExpiry: '',
+    registrationExpiry: '',
+    image: '',
     notes: '',
   };
 
@@ -97,12 +97,12 @@ export default function VehicleModal({
         ...vehicle,
         location: vehicle.location || vehicle.depotLocation || 'JFK Airport Fleet Hub',
         depotLocation: vehicle.depotLocation || vehicle.location || 'JFK Airport Fleet Hub',
-        purchaseDate: vehicle.purchaseDate || '2024-01-15',
-        purchasePrice: vehicle.purchasePrice || 28500,
-        lenderName: vehicle.lenderName || 'Chase Commercial Fleet Financing',
-        loanAmount: vehicle.loanAmount || 24000,
-        monthlyPayment: vehicle.monthlyPayment || 460,
-        loanTermMonths: vehicle.loanTermMonths || 48,
+        purchaseDate: vehicle.purchaseDate ? vehicle.purchaseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+        purchasePrice: vehicle.purchasePrice ?? '',
+        lenderName: vehicle.lenderName ?? '',
+        loanAmount: vehicle.loanAmount ?? '',
+        monthlyPayment: vehicle.monthlyPayment ?? '',
+        loanTermMonths: vehicle.loanTermMonths ?? '',
       });
       setErrors({});
     } else if (isOpen) {
@@ -112,17 +112,10 @@ export default function VehicleModal({
       while (existingIds.includes(`VEH-${String(nextNum).padStart(3, '0')}`)) {
         nextNum++;
       }
-      const uniquePlate = `PR-2025-${String(nextNum).padStart(2, '0')}`;
-      const uniqueVin = generateUniqueVin(vehicles);
 
       setFormData({
         ...defaultForm,
         id: `VEH-${String(nextNum).padStart(3, '0')}`,
-        plate: uniquePlate,
-        vin: uniqueVin,
-        name: 'Toyota Camry SE',
-        make: 'Toyota',
-        model: 'Camry SE',
       });
       setErrors({});
     }
