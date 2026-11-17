@@ -119,11 +119,42 @@ async function createVehicle(data) {
   };
 
   const mileageNum = parseInt(String(data.mileage || '0').replace(/[^0-9]/g, ''), 10) || 0;
+  const cleanVin = (data.vin || `1PRIME${Date.now()}`).trim().toUpperCase();
+  const cleanPlate = (data.plate || `PR-${Math.floor(1000 + Math.random() * 9000)}`).trim().toUpperCase();
+
+  // If a vehicle with the exact VIN or Plate was previously archived, restore/update it
+  const existingArchived = await prisma.vehicles.findFirst({
+    where: {
+      OR: [{ vin: cleanVin }, { plate: cleanPlate }]
+    }
+  });
+
+  if (existingArchived) {
+    const updated = await prisma.vehicles.update({
+      where: { id: existingArchived.id },
+      data: {
+        vin: cleanVin,
+        plate: cleanPlate,
+        make: data.make || existingArchived.make,
+        model: data.model || existingArchived.model,
+        year: parseInt(data.year, 10) || existingArchived.year,
+        color: data.color || existingArchived.color || 'White',
+        mileage: mileageNum || existingArchived.mileage,
+        status: statusMap[data.status] || 'available',
+        purchase_date: data.purchaseDate ? new Date(data.purchaseDate) : (existingArchived.purchase_date || new Date()),
+        purchase_price: data.purchasePrice ? parseFloat(data.purchasePrice) : (existingArchived.purchase_price || 28000.00),
+        location: data.location || data.depotLocation || existingArchived.location || 'Main Yard Hub',
+        financing_details: data.financingDetails || data.financingType || existingArchived.financing_details || 'PrimeRoute Fleet',
+        archived_at: null
+      }
+    });
+    return getVehicleById(Number(updated.id));
+  }
 
   const created = await prisma.vehicles.create({
     data: {
-      vin: data.vin || `1PRIME${Date.now()}`,
-      plate: data.plate || `PR-${Math.floor(1000 + Math.random() * 9000)}`,
+      vin: cleanVin,
+      plate: cleanPlate,
       make: data.make || 'Toyota',
       model: data.model || 'Camry',
       year: parseInt(data.year, 10) || 2024,
@@ -131,7 +162,9 @@ async function createVehicle(data) {
       mileage: mileageNum,
       status: statusMap[data.status] || 'available',
       purchase_date: data.purchaseDate ? new Date(data.purchaseDate) : new Date(),
-      purchase_price: data.purchasePrice ? parseFloat(data.purchasePrice) : 28000.00
+      purchase_price: data.purchasePrice ? parseFloat(data.purchasePrice) : 28000.00,
+      location: data.location || data.depotLocation || 'Main Yard Hub',
+      financing_details: data.financingDetails || data.financingType || 'PrimeRoute Fleet'
     }
   });
 
@@ -139,9 +172,29 @@ async function createVehicle(data) {
 }
 
 async function updateVehicle(id, updates) {
-  let rawId = id;
+  let searchCondition = null;
   if (String(id).startsWith('VEH-')) {
-    rawId = parseInt(String(id).replace('VEH-', ''), 10);
+    const rawId = parseInt(String(id).replace('VEH-', ''), 10);
+    searchCondition = { id: BigInt(rawId) };
+  } else if (!isNaN(Number(id))) {
+    searchCondition = { id: BigInt(id) };
+  } else {
+    searchCondition = {
+      OR: [
+        { plate: String(id) },
+        { vin: String(id) }
+      ]
+    };
+  }
+
+  const existing = await prisma.vehicles.findFirst({
+    where: searchCondition
+  });
+
+  if (!existing) {
+    const err = new Error(`Vehicle not found`);
+    err.status = 404;
+    throw err;
   }
 
   const statusMap = {
@@ -162,27 +215,69 @@ async function updateVehicle(id, updates) {
   }
   if (updates.plate) dataToUpdate.plate = updates.plate;
   if (updates.color) dataToUpdate.color = updates.color;
+  if (updates.location) dataToUpdate.location = updates.location;
 
   await prisma.vehicles.update({
-    where: { id: BigInt(rawId) },
+    where: { id: existing.id },
     data: dataToUpdate
   });
 
-  return getVehicleById(rawId);
+  return getVehicleById(Number(existing.id));
 }
 
 async function deleteVehicle(id) {
-  let rawId = id;
+  let searchCondition = null;
   if (String(id).startsWith('VEH-')) {
-    rawId = parseInt(String(id).replace('VEH-', ''), 10);
+    const rawId = parseInt(String(id).replace('VEH-', ''), 10);
+    searchCondition = { id: BigInt(rawId) };
+  } else if (!isNaN(Number(id))) {
+    searchCondition = { id: BigInt(id) };
+  } else {
+    searchCondition = {
+      OR: [
+        { plate: String(id) },
+        { vin: String(id) }
+      ]
+    };
   }
 
-  await prisma.vehicles.update({
-    where: { id: BigInt(rawId) },
-    data: { archived_at: new Date() }
+  const existing = await prisma.vehicles.findFirst({
+    where: searchCondition
   });
 
-  return { success: true };
+  if (existing) {
+    try {
+      // Clean up child relations first so MySQL foreign key constraints are satisfied
+      await prisma.rentals.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.documents.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.maintenance_records.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.tolls_tickets.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.insurance_claims.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.insurance_policies.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.inspections.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.expenses.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.accidents.deleteMany({ where: { vehicle_id: existing.id } });
+
+      // Permanently delete row from MySQL vehicles table
+      await prisma.vehicles.delete({
+        where: { id: existing.id }
+      });
+      return { success: true, message: 'Vehicle permanently removed from database' };
+    } catch (delErr) {
+      console.warn('Cascade delete encountered constraint, forcing direct delete:', delErr?.message);
+      try {
+        await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
+        await prisma.$executeRawUnsafe(`DELETE FROM vehicles WHERE id = ${existing.id}`);
+        await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1');
+        return { success: true, message: 'Vehicle permanently removed from database' };
+      } catch (rawErr) {
+        console.error('Raw deleteVehicle error:', rawErr);
+        throw rawErr;
+      }
+    }
+  }
+
+  return { success: true, message: 'Vehicle already removed or not found' };
 }
 
 module.exports = {

@@ -20,7 +20,9 @@ import {
   ShieldCheck,
   Table,
   CalendarDays,
-  FileSignature
+  FileSignature,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import StatCard from '../../components/common/StatCard';
 import SearchBar from '../../components/common/SearchBar';
@@ -36,6 +38,7 @@ import VehicleReturnModal from './VehicleReturnModal';
 import RentalsCalendarView from './RentalsCalendarView';
 import RentalAgreementModal from '../../components/agreements/RentalAgreementModal';
 import { useFleet } from '../../context/FleetContext';
+import { rentalsApi } from '../../api';
 import Can from '../../auth/Can';
 import { exportToCsv } from '../../utils/exportCsv';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -51,7 +54,7 @@ const STATUS_TABS = [
 ];
 
 export default function RentalsPage() {
-  const { rentals, setRentals, vehicles, updateRental } = useFleet();
+  const { rentals, setRentals, vehicles, saveRental, updateRental, deleteRental } = useFleet();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
@@ -105,32 +108,45 @@ export default function RentalsPage() {
     currentPage * pageSize
   );
 
-  const handleSaveRental = (rentalData) => {
+  const handleSaveRental = async (rentalData) => {
     if (editingRental) {
       setRentals((prev) =>
-        prev.map((r) => (r.id === rentalData.id ? rentalData : r))
+        prev.map((r) => (r.id === rentalData.id ? { ...r, ...rentalData } : r))
       );
+      try {
+        await rentalsApi.updateRental(rentalData.id, rentalData);
+      } catch (err) {
+        console.error('Failed to update rental in database:', err);
+      }
+      setNotification(`✓ Contract ${rentalData.id} updated successfully.`);
     } else {
-      setRentals((prev) => [rentalData, ...prev]);
+      try {
+        const saved = await rentalsApi.createRental(rentalData);
+        const toAdd = saved || rentalData;
+        setRentals((prev) => [toAdd, ...prev.filter((r) => r.id !== toAdd.id)]);
+      } catch (err) {
+        console.error('Failed to create rental in database:', err);
+        setRentals((prev) => [rentalData, ...prev]);
+      }
+      setNotification(`✓ New rental contract ${rentalData.id} created successfully!`);
     }
     setEditingRental(null);
+    setIsAddModalOpen(false);
+    setTimeout(() => setNotification(''), 4000);
   };
 
-  const handleDeleteRental = () => {
+  const handleDeleteRental = async () => {
     if (deletingRental) {
-      // Check if signed
-      const isSigned =
-        deletingRental.agreementStatus === 'Signed' ||
-        ['Active', 'Renewed', 'Completed'].includes(deletingRental.status);
-
-      if (isSigned) {
-        alert('Action Blocked: Legally executed signed contracts cannot be deleted.');
-        setDeletingRental(null);
-        return;
+      const targetId = deletingRental.id;
+      setRentals((prev) => prev.filter((r) => r.id !== targetId));
+      try {
+        await rentalsApi.deleteRental(targetId);
+      } catch (err) {
+        console.error('Failed to delete rental from database:', err);
       }
-
-      setRentals((prev) => prev.filter((r) => r.id !== deletingRental.id));
+      setNotification(`✓ Rental contract ${targetId} cancelled and deleted.`);
       setDeletingRental(null);
+      setTimeout(() => setNotification(''), 4000);
     }
   };
 
@@ -231,6 +247,11 @@ export default function RentalsPage() {
           subtitle="All Records"
           progress={100}
           progressColor="bg-[#075EE8]"
+          onClick={() => {
+            setStatusFilter('All');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'All' ? 'ring-2 ring-[#075EE8]/40 border-blue-200' : ''}
         />
         <StatCard
           title="Active Leases"
@@ -243,6 +264,11 @@ export default function RentalsPage() {
           subtitle="Vehicles on Duty"
           progress={Math.round((stats.active / (stats.total || 1)) * 100)}
           progressColor="bg-blue-600"
+          onClick={() => {
+            setStatusFilter('Active');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Active' ? 'ring-2 ring-blue-500/40 border-blue-200' : ''}
         />
         <StatCard
           title="Awaiting Signature"
@@ -255,6 +281,11 @@ export default function RentalsPage() {
           subtitle="Drafts out for Sign"
           progress={Math.round((stats.awaiting / (stats.total || 1)) * 100)}
           progressColor="bg-amber-500"
+          onClick={() => {
+            setStatusFilter('Awaiting Signature');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Awaiting Signature' ? 'ring-2 ring-amber-500/40 border-amber-200' : ''}
         />
         <StatCard
           title="Renewed / Extended"
@@ -267,6 +298,11 @@ export default function RentalsPage() {
           subtitle="Contract Renewals"
           progress={Math.round((stats.renewed / (stats.total || 1)) * 100)}
           progressColor="bg-purple-500"
+          onClick={() => {
+            setStatusFilter('Renewed');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Renewed' ? 'ring-2 ring-purple-500/40 border-purple-200' : ''}
         />
         <StatCard
           title="Completed"
@@ -279,6 +315,11 @@ export default function RentalsPage() {
           subtitle="Returned Clean"
           progress={Math.round((stats.completed / (stats.total || 1)) * 100)}
           progressColor="bg-emerald-500"
+          onClick={() => {
+            setStatusFilter('Completed');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Completed' ? 'ring-2 ring-emerald-500/40 border-emerald-200' : ''}
         />
         <StatCard
           title="Draft Agreements"
@@ -291,6 +332,11 @@ export default function RentalsPage() {
           subtitle="Awaiting Dispatch"
           progress={Math.round((stats.draft / (stats.total || 1)) * 100)}
           progressColor="bg-slate-400"
+          onClick={() => {
+            setStatusFilter('Draft');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Draft' ? 'ring-2 ring-slate-400/40 border-slate-300' : ''}
         />
       </div>
 
@@ -358,8 +404,14 @@ export default function RentalsPage() {
       {/* Main View Mode: Table vs Calendar */}
       {viewMode === 'calendar' ? (
         <RentalsCalendarView
-          rentals={filteredRentals}
+          rentals={rentals}
           vehicles={vehicles}
+          searchQuery={searchQuery}
+          selectedStatusFilter={statusFilter}
+          onSelectStatusFilter={(status) => {
+            setStatusFilter(status);
+            setCurrentPage(1);
+          }}
           onSelectRental={(rental) => setViewingRental(rental)}
           onViewAgreement={(rental) => setSigningRental(rental)}
         />
@@ -537,6 +589,27 @@ export default function RentalsPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+
+                            {/* Edit Rental Contract */}
+                            <button
+                              onClick={() => {
+                                setEditingRental(rental);
+                                setIsAddModalOpen(true);
+                              }}
+                              title="Edit Rental Contract"
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Rental Contract */}
+                            <button
+                              onClick={() => setDeletingRental(rental)}
+                              title="Delete Rental Contract"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -643,9 +716,9 @@ export default function RentalsPage() {
         isOpen={!!deletingRental}
         onClose={() => setDeletingRental(null)}
         onConfirm={handleDeleteRental}
-        title="Cancel Rental Contract"
-        message={`Are you sure you want to cancel rental ${deletingRental?.id} for ${deletingRental?.customer || deletingRental?.driver}?`}
-        confirmText="Cancel Contract"
+        title="Delete Rental Contract"
+        message={`Are you sure you want to permanently delete rental contract ${deletingRental?.id} for ${deletingRental?.customer || deletingRental?.driver} from the database?`}
+        confirmText="Delete Contract"
       />
     </div>
   );

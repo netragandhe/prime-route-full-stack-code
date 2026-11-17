@@ -187,7 +187,7 @@ export default function VehiclesPage() {
   );
 
   // Save handler (Add or Edit)
-  const handleSaveVehicle = (vehicleData) => {
+  const handleSaveVehicle = async (vehicleData) => {
     const finalVehicle = {
       ...vehicleData,
       name: vehicleData.name || `${vehicleData.make} ${vehicleData.model}`.trim() || 'Fleet Vehicle',
@@ -202,7 +202,11 @@ export default function VehiclesPage() {
       setVehicles((prev) =>
         prev.map((v) => (v.id === finalVehicle.id ? finalVehicle : v))
       );
-      vehiclesApi.updateVehicle(finalVehicle.id, finalVehicle).catch(console.error);
+      try {
+        await vehiclesApi.updateVehicle(finalVehicle.id, finalVehicle);
+      } catch (err) {
+        console.error('Failed to update vehicle in database:', err);
+      }
       auditApi.appendAuditLog({
         action: 'Vehicle Updated',
         module: 'Vehicles',
@@ -210,8 +214,14 @@ export default function VehiclesPage() {
       });
       setToastMessage(`✓ Vehicle ${finalVehicle.id} (${finalVehicle.name}) updated successfully.`);
     } else {
-      setVehicles((prev) => [finalVehicle, ...prev]);
-      vehiclesApi.createVehicle(finalVehicle).catch(console.error);
+      try {
+        const saved = await vehiclesApi.createVehicle(finalVehicle);
+        const vehicleToAdd = saved || finalVehicle;
+        setVehicles((prev) => [vehicleToAdd, ...prev.filter((v) => v.id !== vehicleToAdd.id && v.plate !== vehicleToAdd.plate)]);
+      } catch (err) {
+        console.error('Failed to save vehicle to database:', err);
+        setVehicles((prev) => [finalVehicle, ...prev]);
+      }
       auditApi.appendAuditLog({
         action: 'Vehicle Created',
         module: 'Vehicles',
@@ -230,13 +240,17 @@ export default function VehiclesPage() {
   };
 
   // Delete / Remove Vehicle Handler
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingVehicle) return;
     const targetId = deletingVehicle.id;
     const targetName = deletingVehicle.name || deletingVehicle.id;
 
     setVehicles((prev) => prev.filter((v) => v.id !== targetId));
-    vehiclesApi.deleteVehicle(targetId).catch(console.error);
+    try {
+      await vehiclesApi.deleteVehicle(targetId);
+    } catch (err) {
+      console.error('Failed to delete vehicle from database:', err);
+    }
     auditApi.appendAuditLog({
       action: 'Vehicle Removed',
       module: 'Vehicles',
@@ -249,7 +263,7 @@ export default function VehiclesPage() {
   };
 
   // Archive Handler (Changes status to Sold/Retired, stores reason)
-  const handleConfirmArchive = ({ vehicleId, archiveReason, archiveDate, salvageValue, notes }) => {
+  const handleConfirmArchive = async ({ vehicleId, archiveReason, archiveDate, salvageValue, notes }) => {
     setVehicles((prev) =>
       prev.map((v) => {
         if (v.id === vehicleId) {
@@ -266,6 +280,11 @@ export default function VehiclesPage() {
         return v;
       })
     );
+    try {
+      await vehiclesApi.deleteVehicle(vehicleId);
+    } catch (err) {
+      console.error('Failed to archive vehicle in database:', err);
+    }
     setArchivingVehicle(null);
   };
 

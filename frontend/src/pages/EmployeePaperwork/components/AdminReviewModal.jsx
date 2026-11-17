@@ -33,7 +33,7 @@ export default function AdminReviewModal({
             rows={3}
             value={adminNotes}
             onChange={(e) => onAdminNotesChange(e.target.value)}
-            className="w-full p-3 rounded-xl text-xs border border-slate-200 focus:border-[#075EE8] focus:outline-hidden"
+            className="w-full p-3 rounded-xl text-xs border border-slate-200 focus:border-[#075EE8] outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20"
             placeholder="Enter feedback notes for the employee..."
           />
         </div>

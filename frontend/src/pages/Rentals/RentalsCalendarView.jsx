@@ -57,12 +57,25 @@ const STATUS_CONFIG = {
 export default function RentalsCalendarView({
   rentals = [],
   vehicles = [],
+  searchQuery = '',
+  selectedStatusFilter: propStatusFilter,
+  onSelectStatusFilter,
   onSelectRental,
   onViewAgreement
 }) {
+  const [localStatusFilter, setLocalStatusFilter] = useState('All');
+  const currentStatusFilter = propStatusFilter !== undefined ? propStatusFilter : localStatusFilter;
+
+  const handleStatusFilterChange = (status) => {
+    if (onSelectStatusFilter) {
+      onSelectStatusFilter(status);
+    }
+    setLocalStatusFilter(status);
+  };
+
   // Determine initial month based on rentals date range or current date
   const [currentDate, setCurrentDate] = useState(() => {
-    // Check if rentals have 2025 dates
+    // Check if rentals have 2026 dates
     const sample = rentals.find((r) => r.startDate);
     if (sample && sample.startDate) {
       const parts = sample.startDate.split('-');
@@ -74,7 +87,6 @@ export default function RentalsCalendarView({
   });
 
   const [selectedRentalPreview, setSelectedRentalPreview] = useState(null);
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
 
   // Month navigation helpers
   const year = currentDate.getFullYear();
@@ -102,11 +114,26 @@ export default function RentalsCalendarView({
     setCurrentDate(new Date());
   };
 
-  // Filter rentals by status if selected
+  // Filter rentals by status and search query if selected
   const activeRentals = useMemo(() => {
-    if (selectedStatusFilter === 'All') return rentals;
-    return rentals.filter((r) => r.status === selectedStatusFilter);
-  }, [rentals, selectedStatusFilter]);
+    return rentals.filter((r) => {
+      const q = (searchQuery || '').toLowerCase();
+      const matchesSearch =
+        !q ||
+        (r.id && r.id.toLowerCase().includes(q)) ||
+        (r.customer && r.customer.toLowerCase().includes(q)) ||
+        (r.vehicle && r.vehicle.toLowerCase().includes(q)) ||
+        (r.driver && r.driver.toLowerCase().includes(q));
+
+      const matchesStatus =
+        !currentStatusFilter ||
+        currentStatusFilter === 'All' ||
+        r.status === currentStatusFilter ||
+        (currentStatusFilter === 'Awaiting Signature' && r.agreementStatus === 'Awaiting Signature');
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [rentals, currentStatusFilter, searchQuery]);
 
   // Compute rentals per vehicle for current month
   // A rental overlaps this month if:
@@ -162,12 +189,12 @@ export default function RentalsCalendarView({
         <div className="flex flex-wrap items-center gap-2">
           {/* Status Filter Chips */}
           <div className="flex items-center gap-1 overflow-x-auto mr-2">
-            {['All', 'Active', 'Awaiting Signature', 'Renewed', 'Completed', 'Draft'].map((status) => (
+            {['All', 'Draft', 'Awaiting Signature', 'Active', 'Renewed', 'Completed', 'Terminated'].map((status) => (
               <button
                 key={status}
-                onClick={() => setSelectedStatusFilter(status)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  selectedStatusFilter === status
+                onClick={() => handleStatusFilterChange(status)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  currentStatusFilter === status
                     ? 'bg-[#075EE8] text-white shadow-2xs'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
@@ -180,20 +207,20 @@ export default function RentalsCalendarView({
           <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs">
             <button
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleToday}
-              className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
             >
               Today
             </button>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
@@ -229,7 +256,13 @@ export default function RentalsCalendarView({
       <div className="overflow-x-auto pb-4">
         <div className="min-w-[1100px] px-4 sm:px-5">
           {/* Days of Month Header */}
-          <div className="grid grid-cols-[220px_repeat(31,minmax(28px,1fr))] border-b border-slate-200 text-center font-mono text-[11px] font-bold text-slate-500 bg-slate-50/70 rounded-t-xl py-2">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `220px repeat(${daysInMonth}, minmax(28px, 1fr))`
+            }}
+            className="border-b border-slate-200 text-center font-mono text-[11px] font-bold text-slate-500 bg-slate-50/70 rounded-t-xl py-2"
+          >
             <div className="text-left pl-3 text-slate-700 font-sans uppercase tracking-wider text-xs font-bold">
               Vehicle / Plate
             </div>
@@ -257,7 +290,11 @@ export default function RentalsCalendarView({
             {vehicleRows.map(({ vehicle, rentals: vRentals }) => (
               <div
                 key={vehicle.id}
-                className="grid grid-cols-[220px_repeat(31,minmax(28px,1fr))] items-center hover:bg-slate-50/40 transition-colors py-2.5"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `220px repeat(${daysInMonth}, minmax(28px, 1fr))`
+                }}
+                className="items-center hover:bg-slate-50/40 transition-colors py-2.5"
               >
                 {/* Vehicle Identity Column */}
                 <div className="pr-2 pl-3 flex items-center gap-2.5 min-w-0">
@@ -289,7 +326,14 @@ export default function RentalsCalendarView({
                 </div>
 
                 {/* Days Grid & Spanning Rental Bars */}
-                <div className="col-span-31 grid grid-cols-31 relative h-9 items-center">
+                <div
+                  style={{
+                    gridColumn: `span ${daysInMonth}`,
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${daysInMonth}, minmax(28px, 1fr))`
+                  }}
+                  className="relative h-9 items-center"
+                >
                   {/* Background grid lines for day columns */}
                   {daysArray.map((day) => {
                     const d = new Date(year, month, day);

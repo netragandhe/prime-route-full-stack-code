@@ -5,75 +5,50 @@ const { verifyAccessToken } = require('../services/tokenService');
 async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      if (process.env.NODE_ENV === 'development') {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = verifyAccessToken(token);
+        const user = await db('users')
+          .where({ id: decoded.userId })
+          .select('id', 'name', 'email', 'role', 'status', 'phone', 'mfa_enabled', 'created_at', 'updated_at')
+          .first();
+
+        if (user && user.status === 'active') {
+          req.user = user;
+          return next();
+        }
+      } catch (tokenErr) {
+        // Token invalid or expired - fallback to dev user if in development mode
+      }
+    }
+
+    // Development mode fallback: auto-authenticate as system administrator
+    if (process.env.NODE_ENV === 'development') {
+      const devUser = await db('users').where({ id: 1 }).first();
+      if (devUser) {
+        req.user = devUser;
+        return next();
+      }
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: {
+        message: 'Authentication token missing, invalid, or expired',
+        code: 'UNAUTHORIZED'
+      }
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      try {
         const devUser = await db('users').where({ id: 1 }).first();
         if (devUser) {
           req.user = devUser;
           return next();
         }
-      }
-      return res.status(401).json({
-        success: false,
-        error: {
-          message: 'Authentication token missing or invalid',
-          code: 'UNAUTHORIZED'
-        }
-      });
+      } catch (e) {}
     }
-
-    const token = authHeader.split(' ')[1];
-    let decoded;
-    try {
-      decoded = verifyAccessToken(token);
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') {
-        const unverified = jwt.decode(token);
-        if (unverified && unverified.userId) {
-          decoded = unverified;
-        } else {
-          const devUser = await db('users').where({ id: 1 }).first();
-          if (devUser) {
-            req.user = devUser;
-            return next();
-          }
-        }
-      }
-      if (!decoded) {
-        throw err;
-      }
-    }
-
-    const targetUserId = decoded?.userId || decoded?.id || 1;
-
-    const user = await db('users')
-      .where({ id: targetUserId })
-      .select('id', 'name', 'email', 'role', 'status', 'phone', 'mfa_enabled', 'created_at', 'updated_at')
-      .first();
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: {
-          message: 'User associated with token no longer exists',
-          code: 'USER_NOT_FOUND'
-        }
-      });
-    }
-
-    if (user.status !== 'active') {
-      return res.status(403).json({
-        success: false,
-        error: {
-          message: `Account is ${user.status}. Please contact system administrator.`,
-          code: 'ACCOUNT_INACTIVE'
-        }
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
     next(error);
   }
 }

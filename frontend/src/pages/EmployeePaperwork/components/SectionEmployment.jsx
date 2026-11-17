@@ -43,9 +43,9 @@ export default function SectionEmployment({ formData, errors, onEmploymentChange
           <select
             value={formData.employment.position}
             onChange={(e) => onEmploymentChange('position', e.target.value)}
-            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors ${
+            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20 ${
               errors.position ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#075EE8]'
-            } focus:outline-hidden`}
+            }`}
           >
             <option value="Logistics Fleet Driver">Logistics Fleet Driver</option>
             <option value="Commercial CDL Driver">Commercial CDL Driver</option>
@@ -64,9 +64,9 @@ export default function SectionEmployment({ formData, errors, onEmploymentChange
           <select
             value={formData.employment.department}
             onChange={(e) => onEmploymentChange('department', e.target.value)}
-            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors ${
+            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20 ${
               errors.department ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#075EE8]'
-            } focus:outline-hidden`}
+            }`}
           >
             <option value="Fleet Operations">Fleet Operations</option>
             <option value="Maintenance & Service">Maintenance & Service</option>
@@ -85,9 +85,9 @@ export default function SectionEmployment({ formData, errors, onEmploymentChange
           <select
             value={formData.employment.employmentType}
             onChange={(e) => onEmploymentChange('employmentType', e.target.value)}
-            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors ${
+            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20 ${
               errors.employmentType ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#075EE8]'
-            } focus:outline-hidden`}
+            }`}
           >
             <option value="Full-Time">Full-Time (W-2)</option>
             <option value="Part-Time">Part-Time (W-2)</option>
@@ -106,9 +106,9 @@ export default function SectionEmployment({ formData, errors, onEmploymentChange
             type="date"
             value={formData.employment.joiningDate}
             onChange={(e) => onEmploymentChange('joiningDate', e.target.value)}
-            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors ${
+            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20 ${
               errors.joiningDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#075EE8]'
-            } focus:outline-hidden`}
+            }`}
           />
           {errors.joiningDate && <p className="text-[11px] text-rose-500 mt-1">{errors.joiningDate}</p>}
         </div>
@@ -121,9 +121,9 @@ export default function SectionEmployment({ formData, errors, onEmploymentChange
           <select
             value={formData.employment.assignedManager}
             onChange={(e) => onEmploymentChange('assignedManager', e.target.value)}
-            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors ${
+            className={`w-full px-3.5 py-2.5 rounded-xl text-xs border transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-[#075EE8]/20 ${
               errors.assignedManager ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#075EE8]'
-            } focus:outline-hidden`}
+            }`}
           >
             <option value="Marcus Vance">Marcus Vance (Fleet Operations Lead)</option>
             <option value="Sarah Jenkins">Sarah Jenkins (Safety & Compliance)</option>

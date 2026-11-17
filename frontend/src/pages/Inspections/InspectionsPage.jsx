@@ -412,31 +412,53 @@ export default function InspectionsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-extrabold text-[#0A1E42]">
-                  {unresolvedAccidents.length} Unresolved Accident Claim Under Review
+                  {unresolvedAccidents.length} Unresolved Accident Claim{unresolvedAccidents.length === 1 ? '' : 's'} Under Review
                 </h4>
-                <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-600 text-white rounded-full">
-                  Claim Open
+                <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                  unresolvedAccidents.length > 0 ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+                }`}>
+                  {unresolvedAccidents.length > 0 ? 'Claim Open' : 'All Settled'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                CLM-TRV-882204 (Honda Civic EX): $2,800 estimate awaiting adjuster report and driver recovery.
+                {unresolvedAccidents.length > 0
+                  ? `${unresolvedAccidents[0].claimNumber || unresolvedAccidents[0].id} (${unresolvedAccidents[0].vehicle}): $${Number(unresolvedAccidents[0].repairEstimate || 2800).toLocaleString()} estimate awaiting adjuster report and driver recovery.`
+                  : 'All incident reports and insurance claims are currently settled and closed.'}
               </p>
-              <div className="flex items-center gap-2 mt-2 text-[11px] font-semibold text-rose-800">
-                <span>Insurer: Travelers Commercial</span>
-                <span>•</span>
-                <span>Deductible: $1,000</span>
-              </div>
+              {unresolvedAccidents.length > 0 ? (
+                <div className="flex items-center gap-2 mt-2 text-[11px] font-semibold text-rose-800">
+                  <span>Insurer: {unresolvedAccidents[0].insuranceCarrier || 'Travelers Commercial'}</span>
+                  <span>•</span>
+                  <span>Deductible: ${Number(unresolvedAccidents[0].deductibleAmount || 1000).toLocaleString()}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-2 text-[11px] font-semibold text-emerald-700">
+                  <span>✓ All claims resolved</span>
+                </div>
+              )}
             </div>
           </div>
           <button
             onClick={() => {
+              const openClaim =
+                unresolvedAccidents[0] ||
+                accidents.find((a) => a.status === 'Under Review' || a.resolutionStatus === 'Under Review') ||
+                accidents[0];
+              if (openClaim) {
+                setEditingAccident(openClaim);
+                setIsAccidentModalOpen(true);
+              }
               setActiveTab('accidents');
-              setStatusFilter('Under Review');
+              if (unresolvedAccidents.length > 0) {
+                setStatusFilter('Under Review');
+              } else {
+                setStatusFilter('All');
+              }
               setCurrentPage(1);
             }}
             className="px-3 py-1.5 text-xs font-bold text-rose-800 bg-rose-100 hover:bg-rose-200 rounded-xl border border-rose-300 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
           >
-            View Open Claim <ArrowRight className="w-3.5 h-3.5" />
+            {unresolvedAccidents.length > 0 ? 'View Open Claim' : 'View Claims'} <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

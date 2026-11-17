@@ -20,8 +20,8 @@ export function FleetProvider({ children }) {
   const [rentals, setRentals] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
-  const [inspections, setInspections] = useState([]);
-  const [accidents, setAccidents] = useState([]);
+  const [inspections, setInspections] = useState(initialInspections);
+  const [accidents, setAccidents] = useState(initialAccidents);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,16 +31,20 @@ export function FleetProvider({ children }) {
     async function loadData() {
       try {
         setIsLoading(true);
-        const [vList, dList, rList] = await Promise.all([
-          vehiclesApi.getVehicles().catch(() => []),
-          driversApi.getDrivers().catch(() => []),
-          rentalsApi.getRentals().catch(() => [])
+        const [vList, dList, rList, insList, accList] = await Promise.all([
+          vehiclesApi.getVehicles().catch(() => null),
+          driversApi.getDrivers().catch(() => null),
+          rentalsApi.getRentals().catch(() => null),
+          inspectionsApi.getInspections().catch(() => initialInspections),
+          inspectionsApi.getAccidents().catch(() => initialAccidents)
         ]);
 
         if (isMounted) {
           if (Array.isArray(vList)) setVehicles(vList);
           if (Array.isArray(dList)) setDrivers(dList);
           if (Array.isArray(rList)) setRentals(rList);
+          if (Array.isArray(insList)) setInspections(insList);
+          if (Array.isArray(accList)) setAccidents(accList);
           setError(null);
         }
       } catch (err) {
@@ -155,6 +159,16 @@ export function FleetProvider({ children }) {
     );
   }, []);
 
+  const deleteRental = useCallback((rentalId) => {
+    setRentals((prev) => prev.filter((r) => r.id !== rentalId));
+    rentalsApi.deleteRental(rentalId).catch(console.error);
+    auditApi.appendAuditLog({
+      action: 'Rental Contract Removed',
+      module: 'Rentals',
+      details: `Rental contract ${rentalId} permanently removed from database.`
+    });
+  }, []);
+
   // Helper: Add inspection record (e.g. check-out pickup or check-in return)
   const addInspection = useCallback((inspectionData) => {
     setInspections((prev) => [inspectionData, ...prev]);
@@ -225,6 +239,7 @@ export function FleetProvider({ children }) {
       setRentals,
       saveRental,
       updateRental,
+      deleteRental,
       vehicles,
       setVehicles,
       updateVehicleStatus,
@@ -250,6 +265,7 @@ export function FleetProvider({ children }) {
       accidents,
       saveRental,
       updateRental,
+      deleteRental,
       updateVehicleStatus,
       updateDriverVehicle,
       addInspection,
@@ -273,6 +289,7 @@ export function useFleet() {
       setRentals: () => {},
       saveRental: () => {},
       updateRental: () => {},
+      deleteRental: () => {},
       vehicles: initialVehicles,
       setVehicles: () => {},
       updateVehicleStatus: () => {},
