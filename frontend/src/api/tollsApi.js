@@ -1,46 +1,117 @@
-import { delay, getCachedOrInit, setCached, ApiError } from './client';
-import { initialTolls, initialTickets } from '../data/mockData';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-const TOLLS_CACHE = 'prime_route_tolls';
-const TICKETS_CACHE = 'prime_route_tickets';
+function getAuthHeaders() {
+  const token = localStorage.getItem('primeroute_access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
+async function request(endpoint, options = {}) {
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...(options.headers || {})
+    }
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.success === false) {
+    const errorMsg = json?.error?.message || json?.message || `Request failed with status ${res.status}`;
+    const err = new Error(errorMsg);
+    err.status = res.status;
+    err.code = json?.error?.code;
+    throw err;
+  }
+  return json;
+}
 
 export const tollsApi = {
-  async getTolls() {
-    await delay();
-    return [...getCachedOrInit(TOLLS_CACHE, () => [...initialTolls])];
+  /**
+   * Get KPI statistics
+   */
+  async getStats() {
+    const res = await request('/tolls/stats');
+    return res.data;
   },
 
-  async getTickets() {
-    await delay();
-    return [...getCachedOrInit(TICKETS_CACHE, () => [...initialTickets])];
+  /**
+   * Get all municipal violation tickets
+   */
+  async getTickets(params = {}) {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.vehicleId) query.append('vehicleId', params.vehicleId);
+    if (params.driverId) query.append('driverId', params.driverId);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await request(`/tolls/tickets${qs}`);
+    return res.data || [];
   },
 
+  /**
+   * Get all Electronic E-ZPass tolls
+   */
+  async getTolls(params = {}) {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await request(`/tolls/electronic${qs}`);
+    return res.data || [];
+  },
+
+  /**
+   * Get single ticket by ID
+   */
+  async getTicketById(id) {
+    const res = await request(`/tolls/tickets/${id}`);
+    return res.data;
+  },
+
+  /**
+   * Create new citation ticket
+   */
   async createTicket(ticketData) {
-    await delay();
-    const tickets = getCachedOrInit(TICKETS_CACHE, () => [...initialTickets]);
-
-    const newTicket = {
-      id: ticketData.id || `TCK-${String(tickets.length + 1).padStart(3, '0')}`,
-      status: ticketData.status || 'Unpaid',
-      createdAt: new Date().toISOString(),
-      ...ticketData
-    };
-
-    const updated = [newTicket, ...tickets];
-    setCached(TICKETS_CACHE, updated);
-    return { ...newTicket };
+    const res = await request('/tolls/tickets', {
+      method: 'POST',
+      body: JSON.stringify(ticketData)
+    });
+    return res.data;
   },
 
+  /**
+   * Update citation ticket
+   */
   async updateTicket(id, updates) {
-    await delay();
-    const tickets = getCachedOrInit(TICKETS_CACHE, () => [...initialTickets]);
-    const index = tickets.findIndex((t) => t.id === id);
-    if (index === -1) throw new ApiError(`Ticket "${id}" not found`, 404);
+    const res = await request(`/tolls/tickets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+    return res.data;
+  },
 
-    const updated = { ...tickets[index], ...updates };
-    tickets[index] = updated;
-    setCached(TICKETS_CACHE, [...tickets]);
-    return { ...updated };
+  /**
+   * Delete citation ticket
+   */
+  async deleteTicket(id) {
+    const res = await request(`/tolls/tickets/${id}`, {
+      method: 'DELETE'
+    });
+    return res;
+  },
+
+  /**
+   * Transition ticket through review workflow
+   */
+  async updateWorkflow(id, action, payload = {}) {
+    const res = await request(`/tolls/tickets/${id}/workflow`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action, ...payload })
+    });
+    return res.data;
   }
 };
-

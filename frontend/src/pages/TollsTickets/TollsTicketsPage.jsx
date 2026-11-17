@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Receipt,
   AlertTriangle,
@@ -18,7 +18,9 @@ import {
   FileText,
   XCircle,
   HelpCircle,
-  X
+  X,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import StatCard from '../../components/common/StatCard';
 import SearchBar from '../../components/common/SearchBar';
@@ -29,15 +31,17 @@ import EmptyState from '../../components/common/EmptyState';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import Modal from '../../components/common/Modal';
 import TicketModal from './TicketModal';
-import { initialTickets, initialTolls } from '../../data/mockData';
+import { tollsApi } from '../../api/tollsApi';
 import { exportToCsv } from '../../utils/exportCsv';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useFleet } from '../../context/FleetContext';
 
 export default function TollsTicketsPage() {
   const { rentals = [], drivers = [] } = useFleet();
-  const [tickets, setTickets] = useState(initialTickets);
-  const [tolls, setTolls] = useState(initialTolls);
+  const [tickets, setTickets] = useState([]);
+  const [tolls, setTolls] = useState([]);
+  const [liveStats, setLiveStats] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'unresolved' | 'overdue' | 'charged' | 'paid' | 'tolls'
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -51,9 +55,48 @@ export default function TollsTicketsPage() {
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // Requirement 3: Summary Cards metrics
+  // Fetch live data from backend API
+  const loadData = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
+    try {
+      const [ticketsData, tollsData, statsData] = await Promise.all([
+        tollsApi.getTickets(),
+        tollsApi.getTolls(),
+        tollsApi.getStats()
+      ]);
+      setTickets(ticketsData || []);
+      setTolls(tollsData || []);
+      setLiveStats(statsData || null);
+    } catch (err) {
+      console.error('Failed to load tolls & tickets:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to fetch live database records'}`);
+    } finally {
+      if (!quiet) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Summary Cards metrics
   const stats = useMemo(() => {
-    // 1. Overdue citations: dueDate < today && status !== 'Paid'
+    if (liveStats) {
+      return {
+        overdueCount: liveStats.overdueCount || 0,
+        overdueAmount: liveStats.overdueAmount || 0,
+        unresolvedCount: liveStats.unresolvedCount || 0,
+        unresolvedAmount: liveStats.unresolvedAmount || 0,
+        chargedCount: liveStats.chargedCount || 0,
+        chargedAmount: liveStats.chargedAmount || 0,
+        paidCount: tickets.filter((t) => t.status === 'Paid').length,
+        tollTotal: liveStats.tollTotal !== undefined ? liveStats.tollTotal : tolls.reduce((s, t) => s + Number(t.amount || 0), 0),
+        tollCount: liveStats.tollCount !== undefined ? liveStats.tollCount : tolls.length,
+        totalTickets: liveStats.totalTickets !== undefined ? liveStats.totalTickets : tickets.length
+      };
+    }
+
+    // Fallback client-side calculation
     const overdueList = tickets.filter(
       (t) => t.dueDate && t.dueDate < todayStr && t.status !== 'Paid'
     );
@@ -62,7 +105,6 @@ export default function TollsTicketsPage() {
       0
     );
 
-    // 2. Unresolved violations: Unassigned, Under Review, Assigned, Disputed
     const unresolvedList = tickets.filter(
       (t) =>
         t.status === 'Unassigned' ||
@@ -76,7 +118,6 @@ export default function TollsTicketsPage() {
       0
     );
 
-    // 3. Driver Charges & Recoveries: Charged or Paid
     const chargedList = tickets.filter(
       (t) => t.status === 'Charged' || t.chargedToDriver === true || t.status === 'Paid'
     );
@@ -90,7 +131,6 @@ export default function TollsTicketsPage() {
       0
     );
 
-    // 4. Paid / Cleared with authorities
     const paidList = tickets.filter((t) => t.status === 'Paid');
     const tollTotal = tolls.reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
@@ -103,11 +143,12 @@ export default function TollsTicketsPage() {
       chargedAmount,
       paidCount: paidList.length,
       tollTotal,
+      tollCount: tolls.length,
       totalTickets: tickets.length
     };
-  }, [tickets, tolls, todayStr]);
+  }, [liveStats, tickets, tolls, todayStr]);
 
-  // Requirement 3: Filters for Overdue, Unresolved, Charged, Paid
+  // Filters for Overdue, Unresolved, Charged, Paid
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
       const q = searchQuery.toLowerCase();
@@ -157,109 +198,120 @@ export default function TollsTicketsPage() {
     return tolls.filter((t) => {
       const q = searchQuery.toLowerCase();
       return (
-        t.id.toLowerCase().includes(q) ||
-        t.vehicle.toLowerCase().includes(q) ||
+        (t.id && t.id.toLowerCase().includes(q)) ||
+        (t.vehicle && t.vehicle.toLowerCase().includes(q)) ||
         (t.tollLocation && t.tollLocation.toLowerCase().includes(q))
       );
     });
   }, [tolls, searchQuery]);
 
   // Save ticket handler
-  const handleSaveTicket = (ticketData) => {
-    if (editingTicket) {
-      setTickets((prev) =>
-        prev.map((t) => (t.id === ticketData.id ? ticketData : t))
-      );
-      setToastMessage(`Citation notice ${ticketData.referenceNumber || ticketData.ticketNumber} updated successfully.`);
-    } else {
-      setTickets((prev) => [ticketData, ...prev]);
-      setToastMessage(`Citation notice ${ticketData.referenceNumber || ticketData.ticketNumber} registered successfully.`);
+  const handleSaveTicket = async (ticketData) => {
+    try {
+      if (editingTicket) {
+        await tollsApi.updateTicket(editingTicket.rawId || editingTicket.id, ticketData);
+        setToastMessage(`✓ Citation notice ${ticketData.referenceNumber || ticketData.ticketNumber} updated in MySQL.`);
+      } else {
+        await tollsApi.createTicket(ticketData);
+        setToastMessage(`✓ Citation notice ${ticketData.referenceNumber || ticketData.ticketNumber} registered in MySQL.`);
+      }
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to save ticket:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to save citation notice'}`);
+    } finally {
+      setEditingTicket(null);
+      setTimeout(() => setToastMessage(null), 5000);
     }
-    setEditingTicket(null);
-    setTimeout(() => setToastMessage(null), 5000);
   };
 
-  const handleDeleteTicket = () => {
-    if (deletingTicket) {
-      setTickets((prev) => prev.filter((t) => t.id !== deletingTicket.id));
-      setToastMessage(`Citation notice ${deletingTicket.ticketNumber || deletingTicket.referenceNumber} removed.`);
+  const handleDeleteTicket = async () => {
+    if (!deletingTicket) return;
+    try {
+      await tollsApi.deleteTicket(deletingTicket.rawId || deletingTicket.id);
+      setToastMessage(`✓ Citation notice ${deletingTicket.ticketNumber || deletingTicket.referenceNumber} removed from database.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to delete ticket:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to delete citation notice'}`);
+    } finally {
       setDeletingTicket(null);
       setTimeout(() => setToastMessage(null), 4000);
     }
   };
 
-  // Requirement 2: Review Workflow Transition Handlers before charging a driver
-  // Unassigned -> Under Review -> Assigned -> Charged -> Paid / Disputed
-
-  const handlePutUnderReview = (ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, status: 'Under Review', notes: `${t.notes ? t.notes + ' | ' : ''}Placed under operational review to audit rental contract dates.` }
-          : t
-      )
-    );
-    setToastMessage(`Violation ${ticketId} status transitioned to "Under Review".`);
+  // Review Workflow Transition Handlers
+  const handlePutUnderReview = async (ticketId) => {
+    const target = tickets.find((t) => t.id === ticketId || t.rawId === ticketId);
+    const id = target?.rawId || ticketId;
+    try {
+      await tollsApi.updateWorkflow(id, 'under_review');
+      setToastMessage(`✓ Violation ${target?.referenceNumber || ticketId} status transitioned to "Under Review".`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to update workflow:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to update workflow'}`);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleConfirmAssignment = (ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, status: 'Assigned' }
-          : t
-      )
-    );
-    setToastMessage(`Violation ${ticketId} driver verified and marked as "Assigned". Ready for recharge.`);
+  const handleConfirmAssignment = async (ticketId) => {
+    const target = tickets.find((t) => t.id === ticketId || t.rawId === ticketId);
+    const id = target?.rawId || ticketId;
+    try {
+      await tollsApi.updateWorkflow(id, 'assign', { driverId: target?.driverId });
+      setToastMessage(`✓ Violation ${target?.referenceNumber || ticketId} driver verified and marked as "Assigned". Ready for recharge.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to assign driver:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to assign driver'}`);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleChargeDriver = (ticket) => {
-    const adminFee = ticket.adminFee !== undefined ? Number(ticket.adminFee) : 15;
-    const fine = Number(ticket.fineAmount || ticket.amount || 0);
-    const totalCharge = fine + adminFee;
-
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticket.id
-          ? {
-              ...t,
-              status: 'Charged',
-              chargedToDriver: true,
-              driverCharge: totalCharge,
-              balance: totalCharge
-            }
-          : t
-      )
-    );
-    setToastMessage(
-      `⚡ Successfully charged ${formatCurrency(totalCharge)} (${formatCurrency(fine)} fine + $${adminFee} processing fee) to ${ticket.driver}'s rental subledger.`
-    );
+  const handleChargeDriver = async (ticket) => {
+    const id = ticket.rawId || ticket.id;
+    try {
+      await tollsApi.updateWorkflow(id, 'charge_driver');
+      const adminFee = ticket.adminFee !== undefined ? Number(ticket.adminFee) : 15;
+      const fine = Number(ticket.fineAmount || ticket.amount || 0);
+      const totalCharge = fine + adminFee;
+      setToastMessage(
+        `⚡ Successfully charged ${formatCurrency(totalCharge)} (${formatCurrency(fine)} fine + $${adminFee} processing fee) to ${ticket.driver}'s rental subledger.`
+      );
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to charge driver:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to charge driver'}`);
+    }
     setTimeout(() => setToastMessage(null), 6000);
   };
 
-  const handleMarkPaid = (ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, status: 'Paid', balance: 0 }
-          : t
-      )
-    );
-    setToastMessage(`Violation ${ticketId} marked as Paid & Cleared with city issuing authority.`);
+  const handleMarkPaid = async (ticketId) => {
+    const target = tickets.find((t) => t.id === ticketId || t.rawId === ticketId);
+    const id = target?.rawId || ticketId;
+    try {
+      await tollsApi.updateWorkflow(id, 'mark_paid');
+      setToastMessage(`✓ Violation ${target?.referenceNumber || ticketId} marked as Paid & Cleared with city issuing authority.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to mark paid:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to mark paid'}`);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleFlagDisputed = (ticketId) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, status: 'Disputed' }
-          : t
-      )
-    );
-    setToastMessage(`Violation ${ticketId} marked as Disputed by driver. Review transponder/license logs.`);
+  const handleFlagDisputed = async (ticketId) => {
+    const target = tickets.find((t) => t.id === ticketId || t.rawId === ticketId);
+    const id = target?.rawId || ticketId;
+    try {
+      await tollsApi.updateWorkflow(id, 'dispute');
+      setToastMessage(`⚠️ Violation ${target?.referenceNumber || ticketId} marked as Disputed by driver. Review transponder/license logs.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to flag dispute:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to flag dispute'}`);
+    }
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -279,7 +331,10 @@ export default function TollsTicketsPage() {
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-black text-[#0A1E42] tracking-tight">Tolls &amp; Violations</h1>
             <span className="text-xs font-bold px-3 py-1 rounded-xl bg-blue-50 text-[#075EE8] border border-blue-100 shadow-2xs">
-              {tickets.length} Municipal Records
+              {stats.totalTickets} Municipal Records
+            </span>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Live MySQL Connected
             </span>
             {stats.overdueCount > 0 && (
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 animate-pulse">
@@ -293,6 +348,15 @@ export default function TollsTicketsPage() {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+          <button
+            onClick={() => loadData(false)}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition-all active:scale-95 duration-150 cursor-pointer disabled:opacity-60"
+            title="Refresh from MySQL"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition-all active:scale-95 duration-150 cursor-pointer"
@@ -329,7 +393,7 @@ export default function TollsTicketsPage() {
         </div>
       )}
 
-      {/* Requirement 3: Summary Cards */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Overdue Citations */}
         <StatCard
@@ -387,7 +451,7 @@ export default function TollsTicketsPage() {
           title="E-ZPass Toll Summary"
           value={stats.tollTotal.toFixed(2)}
           prefix="$"
-          change={`${tolls.length} Pings`}
+          change={`${stats.tollCount} Pings`}
           isPositive={true}
           icon={CreditCard}
           iconColor="text-indigo-600"
@@ -400,9 +464,9 @@ export default function TollsTicketsPage() {
         />
       </div>
 
-      {/* Requirement 3: Filter Tabs & Search Bar */}
+      {/* Filter Tabs & Search Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Filter Chips: All, Unresolved, Overdue, Charged, Paid, Tolls */}
+        {/* Filter Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
           {[
             { id: 'all', label: 'All Violations' },
@@ -447,7 +511,13 @@ export default function TollsTicketsPage() {
       </div>
 
       {/* Table Section: Violations OR Toll Transactions */}
-      {activeTab !== 'tolls' ? (
+      {isLoading ? (
+        <div className="bg-white rounded-2xl border border-slate-100 p-12 flex flex-col items-center justify-center text-center">
+          <Loader2 className="w-8 h-8 text-[#075EE8] animate-spin mb-3" />
+          <h3 className="font-bold text-slate-800 text-sm">Loading Live Records...</h3>
+          <p className="text-xs text-slate-400 mt-1">Connecting to MySQL tolls and violations database</p>
+        </div>
+      ) : activeTab !== 'tolls' ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] overflow-hidden">
           {filteredTickets.length === 0 ? (
             <EmptyState
@@ -583,20 +653,20 @@ export default function TollsTicketsPage() {
                           )}
                         </td>
 
-                        {/* Review Workflow Status (Requirement 2) */}
+                        {/* Review Workflow Status */}
                         <td className="py-3.5 px-4 text-center">
                           <StatusBadge status={t.status || 'Assigned'} />
                         </td>
 
-                        {/* Review Workflow Action Buttons (Requirement 2) */}
+                        {/* Interactive Workflow Actions */}
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            {/* Workflow: Unassigned -> Under Review */}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Workflow: Unassigned -> Put Under Review */}
                             {t.status === 'Unassigned' && (
                               <button
                                 onClick={() => handlePutUnderReview(t.id)}
                                 className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold shadow-2xs transition-all cursor-pointer"
-                                title="Put under review to investigate rental dates"
+                                title="Move to dispatcher review"
                               >
                                 Review
                               </button>
@@ -709,7 +779,7 @@ export default function TollsTicketsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredTolls.map((toll) => (
-                  <tr key={toll.id} className="hover:bg-blue-50/20">
+                  <tr key={toll.id || toll.rawId} className="hover:bg-blue-50/20">
                     <td className="py-3.5 px-4 font-mono font-bold text-[#075EE8]">{toll.id}</td>
                     <td className="py-3.5 px-4 font-semibold text-slate-800">{toll.vehicle}</td>
                     <td className="py-3.5 px-4 text-slate-700">{toll.tollLocation}</td>
