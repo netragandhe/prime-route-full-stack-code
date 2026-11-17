@@ -244,11 +244,27 @@ async function updateDriver(id, updates) {
 async function deleteDriver(id) {
   const driver = await findDriverEntity(id);
   if (driver) {
-    await prisma.drivers.update({
-      where: { id: driver.id },
-      data: { archived_at: new Date() }
-    });
-    return { success: true, message: 'Driver successfully archived' };
+    try {
+      await prisma.rentals.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.documents.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.employee_paperwork.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.invoices.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.ledger_entries.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.tolls_tickets.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.vehicle_assignments.deleteMany({ where: { driver_id: driver.id } });
+      await prisma.accidents.deleteMany({ where: { driver_id: driver.id } });
+
+      await prisma.drivers.delete({
+        where: { id: driver.id }
+      });
+      return { success: true, message: 'Driver permanently removed from database' };
+    } catch (err) {
+      await prisma.drivers.update({
+        where: { id: driver.id },
+        data: { archived_at: new Date() }
+      });
+      return { success: true, message: 'Driver archived' };
+    }
   }
 
   return { success: true, message: 'Driver already removed or not found' };

@@ -246,11 +246,31 @@ async function deleteVehicle(id) {
   });
 
   if (existing) {
-    await prisma.vehicles.update({
-      where: { id: existing.id },
-      data: { archived_at: new Date() }
-    });
-    return { success: true, message: 'Vehicle successfully archived' };
+    try {
+      // Clean up child relations first so MySQL foreign key constraints are satisfied
+      await prisma.rentals.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.documents.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.maintenance_records.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.tolls_tickets.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.insurance_claims.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.insurance_policies.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.inspections.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.expenses.deleteMany({ where: { vehicle_id: existing.id } });
+      await prisma.accidents.deleteMany({ where: { vehicle_id: existing.id } });
+
+      // Permanently delete row from MySQL vehicles table
+      await prisma.vehicles.delete({
+        where: { id: existing.id }
+      });
+      return { success: true, message: 'Vehicle permanently removed from database' };
+    } catch (delErr) {
+      // Fallback: soft-delete if constraint prevents cascade
+      await prisma.vehicles.update({
+        where: { id: existing.id },
+        data: { archived_at: new Date() }
+      });
+      return { success: true, message: 'Vehicle archived' };
+    }
   }
 
   return { success: true, message: 'Vehicle already removed or not found' };
