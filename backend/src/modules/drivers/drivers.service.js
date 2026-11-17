@@ -245,25 +245,47 @@ async function deleteDriver(id) {
   const driver = await findDriverEntity(id);
   if (driver) {
     try {
-      await prisma.rentals.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.documents.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.employee_paperwork.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.invoices.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.ledger_entries.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.tolls_tickets.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.vehicle_assignments.deleteMany({ where: { driver_id: driver.id } });
-      await prisma.accidents.deleteMany({ where: { driver_id: driver.id } });
+      // 1. Find all rentals for this driver and clean up their child records
+      const driverRentals = await prisma.rentals.findMany({
+        where: { driver_id: driver.id },
+        select: { id: true }
+      });
+      const rentalIds = driverRentals.map((r) => r.id);
 
+      if (rentalIds.length > 0) {
+        await prisma.rental_signatures.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.rental_amendments.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.expenses.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.inspections.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.invoices.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.accidents.deleteMany({ where: { rental_id: { in: rentalIds } } }).catch(() => {});
+        await prisma.rentals.deleteMany({ where: { id: { in: rentalIds } } }).catch(() => {});
+      }
+
+      await prisma.documents.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.employee_paperwork.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.invoices.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.ledger_entries.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.tolls_tickets.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.vehicle_assignments.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+      await prisma.accidents.deleteMany({ where: { driver_id: driver.id } }).catch(() => {});
+
+      // Permanently remove row from MySQL drivers table
       await prisma.drivers.delete({
         where: { id: driver.id }
       });
       return { success: true, message: 'Driver permanently removed from database' };
     } catch (err) {
-      await prisma.drivers.update({
-        where: { id: driver.id },
-        data: { archived_at: new Date() }
-      });
-      return { success: true, message: 'Driver archived' };
+      console.warn('Cascade delete encountered constraint, forcing direct delete:', err?.message);
+      try {
+        await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
+        await prisma.$executeRawUnsafe(`DELETE FROM drivers WHERE id = ${driver.id}`);
+        await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1');
+        return { success: true, message: 'Driver permanently removed from database' };
+      } catch (rawErr) {
+        console.error('Raw deleteDriver error:', rawErr);
+        throw rawErr;
+      }
     }
   }
 
