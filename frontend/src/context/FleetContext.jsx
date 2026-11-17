@@ -17,11 +17,11 @@ import {
 const FleetContext = createContext(null);
 
 export function FleetProvider({ children }) {
-  const [rentals, setRentals] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
-  const [inspections, setInspections] = useState([]);
-  const [accidents, setAccidents] = useState([]);
+  const [rentals, setRentals] = useState(initialRentals);
+  const [vehicles, setVehicles] = useState(initialVehicles);
+  const [drivers, setDrivers] = useState(initialDrivers);
+  const [inspections, setInspections] = useState(initialInspections);
+  const [accidents, setAccidents] = useState(initialAccidents);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,16 +31,20 @@ export function FleetProvider({ children }) {
     async function loadData() {
       try {
         setIsLoading(true);
-        const [vList, dList, rList] = await Promise.all([
+        const [vList, dList, rList, insList, accList] = await Promise.all([
           vehiclesApi.getVehicles().catch(() => []),
           driversApi.getDrivers().catch(() => []),
-          rentalsApi.getRentals().catch(() => [])
+          rentalsApi.getRentals().catch(() => []),
+          inspectionsApi.getInspections().catch(() => initialInspections),
+          inspectionsApi.getAccidents().catch(() => initialAccidents)
         ]);
 
         if (isMounted) {
-          if (Array.isArray(vList)) setVehicles(vList);
-          if (Array.isArray(dList)) setDrivers(dList);
-          if (Array.isArray(rList)) setRentals(rList);
+          if (Array.isArray(vList) && vList.length > 0) setVehicles(vList);
+          if (Array.isArray(dList) && dList.length > 0) setDrivers(dList);
+          if (Array.isArray(rList) && rList.length > 0) setRentals(rList);
+          if (Array.isArray(insList) && insList.length > 0) setInspections(insList);
+          if (Array.isArray(accList) && accList.length > 0) setAccidents(accList);
           setError(null);
         }
       } catch (err) {
