@@ -32,19 +32,19 @@ export function FleetProvider({ children }) {
       try {
         setIsLoading(true);
         const [vList, dList, rList, insList, accList] = await Promise.all([
-          vehiclesApi.getVehicles().catch(() => []),
-          driversApi.getDrivers().catch(() => []),
-          rentalsApi.getRentals().catch(() => []),
+          vehiclesApi.getVehicles().catch(() => null),
+          driversApi.getDrivers().catch(() => null),
+          rentalsApi.getRentals().catch(() => null),
           inspectionsApi.getInspections().catch(() => initialInspections),
           inspectionsApi.getAccidents().catch(() => initialAccidents)
         ]);
 
         if (isMounted) {
-          if (Array.isArray(vList) && vList.length > 0) setVehicles(vList);
-          if (Array.isArray(dList) && dList.length > 0) setDrivers(dList);
-          if (Array.isArray(rList) && rList.length > 0) setRentals(rList);
-          if (Array.isArray(insList) && insList.length > 0) setInspections(insList);
-          if (Array.isArray(accList) && accList.length > 0) setAccidents(accList);
+          if (Array.isArray(vList)) setVehicles(vList);
+          if (Array.isArray(dList)) setDrivers(dList);
+          if (Array.isArray(rList)) setRentals(rList);
+          if (Array.isArray(insList)) setInspections(insList);
+          if (Array.isArray(accList)) setAccidents(accList);
           setError(null);
         }
       } catch (err) {
