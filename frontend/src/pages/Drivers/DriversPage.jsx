@@ -166,12 +166,16 @@ export default function DriversPage() {
   );
 
   // Save Driver (Add or Edit)
-  const handleSaveDriver = (driverData) => {
+  const handleSaveDriver = async (driverData) => {
     if (editingDriver) {
       setDrivers((prev) =>
         prev.map((d) => (d.id === driverData.id ? { ...d, ...driverData } : d))
       );
-      driversApi.updateDriver(driverData.id, driverData).catch(console.error);
+      try {
+        await driversApi.updateDriver(driverData.id, driverData);
+      } catch (err) {
+        console.error('Failed to update driver in database:', err);
+      }
       auditApi.appendAuditLog({
         action: 'Driver Updated',
         module: 'Drivers',
@@ -179,8 +183,14 @@ export default function DriversPage() {
       });
       setToastMessage(`✓ Driver ${driverData.name} (${driverData.id}) updated successfully.`);
     } else {
-      setDrivers((prev) => [driverData, ...prev]);
-      driversApi.createDriver(driverData).catch(console.error);
+      try {
+        const saved = await driversApi.createDriver(driverData);
+        const driverToAdd = saved || driverData;
+        setDrivers((prev) => [driverToAdd, ...prev.filter((d) => d.id !== driverToAdd.id && d.license !== driverToAdd.license)]);
+      } catch (err) {
+        console.error('Failed to save driver to database:', err);
+        setDrivers((prev) => [driverData, ...prev]);
+      }
       auditApi.appendAuditLog({
         action: 'Driver Registered',
         module: 'Drivers',
@@ -197,7 +207,7 @@ export default function DriversPage() {
   };
 
   // Delete / Remove Driver
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingDriver) return;
     const targetId = deletingDriver.id;
     const targetName = deletingDriver.name || targetId;
@@ -208,7 +218,11 @@ export default function DriversPage() {
     }
 
     setDrivers((prev) => prev.filter((d) => d.id !== targetId));
-    driversApi.deleteDriver(targetId).catch(console.error);
+    try {
+      await driversApi.deleteDriver(targetId);
+    } catch (err) {
+      console.error('Failed to delete driver from database:', err);
+    }
     auditApi.appendAuditLog({
       action: 'Driver Removed',
       module: 'Drivers',
@@ -221,7 +235,7 @@ export default function DriversPage() {
   };
 
   // Confirm Archive Driver
-  const handleConfirmArchive = ({ driverId, archiveReason, archiveDate, unassignVehicle, notes }) => {
+  const handleConfirmArchive = async ({ driverId, archiveReason, archiveDate, unassignVehicle, notes }) => {
     setDrivers((prev) =>
       prev.map((d) => {
         if (d.id === driverId) {
@@ -242,25 +256,39 @@ export default function DriversPage() {
         return d;
       })
     );
+    try {
+      await driversApi.deleteDriver(driverId);
+    } catch (err) {
+      console.error('Failed to archive driver in database:', err);
+    }
     setArchivingDriver(null);
   };
 
   // Record Payment
-  const handleSavePayment = ({ driverId, amount, paymentMethod, reference, notes }) => {
+  const handleSavePayment = async ({ driverId, amount, paymentMethod, reference, notes }) => {
+    let targetDriver = null;
     setDrivers((prev) =>
       prev.map((d) => {
         if (d.id === driverId) {
           const currentBal = Number(d.balance) || 0;
           const newBal = Math.max(0, currentBal - amount);
-          return {
+          targetDriver = {
             ...d,
             balance: newBal,
             lastPaymentDate: new Date().toISOString().split('T')[0],
           };
+          return targetDriver;
         }
         return d;
       })
     );
+    if (targetDriver) {
+      try {
+        await driversApi.updateDriver(driverId, { balance: targetDriver.balance });
+      } catch (err) {
+        console.error('Failed to sync payment balance to database:', err);
+      }
+    }
     setPaymentDriver(null);
   };
 
