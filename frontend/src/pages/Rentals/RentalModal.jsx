@@ -56,15 +56,15 @@ export default function RentalModal({
     startDate: todayStr,
     endDate: defaultEndStr,
     rentalType: 'Commercial Weekly',
-    weeklyRent: 450,
-    amount: 900,
-    deposit: 500,
-    mileageAllowance: 1200,
+    weeklyRent: '',
+    amount: 0,
+    deposit: '',
+    mileageAllowance: '',
     excessMileageRate: 0.25,
     paymentSchedule: 'Weekly every Monday',
     paymentMethod: 'Corporate ACH',
     status: 'Draft',
-    notes: 'Commercial lease agreement generated via PrimeRoute Dispatch.',
+    notes: '',
     approvedTerms: [...STANDARD_TERMS]
   });
 
@@ -75,42 +75,40 @@ export default function RentalModal({
     if (rental && isOpen) {
       setFormData({
         ...rental,
-        weeklyRent: rental.weeklyRent || Math.round((rental.amount || 1950) / 4) || 450,
+        weeklyRent: rental.weeklyRent || Math.round((rental.amount || 1950) / 4) || '',
         paymentSchedule: rental.paymentDueDay || rental.paymentSchedule || 'Weekly every Monday',
         approvedTerms: rental.approvedTerms || [...STANDARD_TERMS]
       });
       setValidationError('');
     } else if (isOpen) {
       const generatedContractNo = `PR-CTR-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
-      const firstAvailable = vehicles.find((v) => v.status === 'Available') || vehicles[0];
-      const firstDriver = activeDrivers[0] || drivers[0];
 
       setFormData({
         id: generatedContractNo,
-        customer: firstDriver?.name || 'Marcus Vance',
-        customerPhone: firstDriver?.phone || '+1 (555) 234-8901',
-        customerEmail: firstDriver?.email || 'marcus.vance@primeroute.io',
-        driverId: firstDriver?.id || 'DRV-101',
-        driver: firstDriver?.name || 'Marcus Vance',
-        vehicleId: firstAvailable?.id || 'VEH-001',
-        vehicle: firstAvailable ? `${firstAvailable.year} ${firstAvailable.make} ${firstAvailable.model} (${firstAvailable.plate})` : '2024 Toyota Camry SE (PR-2024-TC)',
+        customer: '',
+        customerPhone: '',
+        customerEmail: '',
+        driverId: '',
+        driver: '',
+        vehicleId: '',
+        vehicle: '',
         startDate: todayStr,
         endDate: defaultEndStr,
         rentalType: 'Commercial Weekly',
-        weeklyRent: firstAvailable?.rate || 450,
-        amount: (firstAvailable?.rate || 450) * 2,
-        deposit: 500,
-        mileageAllowance: 1200,
+        weeklyRent: '',
+        amount: 0,
+        deposit: '',
+        mileageAllowance: '',
         excessMileageRate: 0.25,
         paymentSchedule: 'Weekly every Monday',
         paymentMethod: 'Corporate ACH',
         status: 'Draft',
-        notes: 'Commercial lease agreement generated via PrimeRoute Dispatch.',
+        notes: '',
         approvedTerms: [...STANDARD_TERMS]
       });
       setValidationError('');
     }
-  }, [rental, isOpen, vehicles, activeDrivers, todayStr, defaultEndStr]);
+  }, [rental, isOpen, todayStr, defaultEndStr]);
 
   // Recalculate amount whenever weeklyRent or date range changes
   useEffect(() => {
@@ -147,15 +145,17 @@ export default function RentalModal({
         driverId: found.id,
         driver: found.name,
         customer: found.name,
-        customerPhone: found.phone || prev.customerPhone,
-        customerEmail: found.email || prev.customerEmail
+        customerPhone: found.phone || '',
+        customerEmail: found.email || ''
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
         driverId: '',
         driver: '',
-        customer: ''
+        customer: '',
+        customerPhone: '',
+        customerEmail: ''
       }));
     }
   };
@@ -197,13 +197,14 @@ export default function RentalModal({
         ...prev,
         vehicleId: found.id,
         vehicle: `${found.year} ${found.make} ${found.model} (${found.plate})`,
-        weeklyRent: found.rate || prev.weeklyRent || 450
+        weeklyRent: found.rate !== undefined && found.rate !== null && found.rate !== '' ? found.rate : (prev.weeklyRent || '')
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
         vehicleId: '',
-        vehicle: ''
+        vehicle: '',
+        weeklyRent: ''
       }));
     }
   };
@@ -259,7 +260,7 @@ export default function RentalModal({
     }
 
     const weeks = Math.max(1, Math.ceil((new Date(formData.endDate) - new Date(formData.startDate)) / (7 * 24 * 60 * 60 * 1000)));
-    const baseAmount = (Number(formData.weeklyRent) || 450) * weeks;
+    const baseAmount = (Number(formData.weeklyRent) || 0) * weeks;
     const taxAmount = Math.round(baseAmount * 0.08);
 
     const submissionData = {
@@ -270,11 +271,11 @@ export default function RentalModal({
       agreementStatus: formData.agreementStatus || 'Draft',
       status: formData.status || 'Draft',
       paymentDueDay: formData.paymentSchedule,
-      securityDeposit: Number(formData.deposit) || 500,
-      weeklyRent: Number(formData.weeklyRent) || 450,
-      mileageAllowance: Number(formData.mileageAllowance) || 1200,
+      securityDeposit: Number(formData.deposit) || 0,
+      weeklyRent: Number(formData.weeklyRent) || 0,
+      mileageAllowance: Number(formData.mileageAllowance) || 0,
       excessMileageRate: Number(formData.excessMileageRate) || 0.25,
-      notes: formData.notes
+      notes: formData.notes || ''
     };
 
     onSave(submissionData);
@@ -406,6 +407,7 @@ export default function RentalModal({
                 type="number"
                 value={formData.weeklyRent}
                 onChange={handleChange}
+                placeholder="e.g. 450"
                 required
               />
               <FormInput
@@ -414,6 +416,7 @@ export default function RentalModal({
                 type="number"
                 value={formData.deposit}
                 onChange={handleChange}
+                placeholder="e.g. 500"
                 required
               />
               <FormInput
@@ -422,7 +425,7 @@ export default function RentalModal({
                 type="number"
                 value={formData.mileageAllowance}
                 onChange={handleChange}
-                placeholder="1200"
+                placeholder="e.g. 1200"
               />
             </div>
 
@@ -546,10 +549,10 @@ export default function RentalModal({
                     <div>
                       <span className="text-slate-400 block text-[10px]">Lessee (Driver):</span>
                       <span className="font-bold text-slate-800 block">
-                        {formData.driver || 'Selected Driver'}
+                        {formData.driver || '— (Pending Selection)'}
                       </span>
                       <span className="text-[10px] text-slate-500">
-                        DL: {selectedDriverObj?.license || 'DL-PENDING'} • {formData.customerPhone || 'Phone'}
+                        {selectedDriverObj ? `DL: ${selectedDriverObj.license || '—'}` : 'DL: —'} {formData.customerPhone ? `• ${formData.customerPhone}` : ''}
                       </span>
                     </div>
                   </div>
@@ -564,19 +567,19 @@ export default function RentalModal({
                     <div>
                       <span className="text-slate-400 block text-[10px]">Make &amp; Model:</span>
                       <span className="font-bold text-slate-800 truncate block">
-                        {selectedVehicleObj ? `${selectedVehicleObj.year} ${selectedVehicleObj.make} ${selectedVehicleObj.model}` : 'Unassigned'}
+                        {selectedVehicleObj ? `${selectedVehicleObj.year} ${selectedVehicleObj.make} ${selectedVehicleObj.model}` : '— (Pending Selection)'}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">VIN:</span>
                       <span className="font-mono font-bold text-slate-800 text-[10px] truncate block">
-                        {selectedVehicleObj?.vin || 'VIN-PENDING'}
+                        {selectedVehicleObj?.vin || '—'}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">License Plate:</span>
                       <span className="font-mono font-bold text-slate-800 block">
-                        {selectedVehicleObj?.plate || 'PR-PENDING'}
+                        {selectedVehicleObj?.plate || '—'}
                       </span>
                     </div>
                   </div>
@@ -598,16 +601,16 @@ export default function RentalModal({
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">Weekly Rate:</span>
-                      <span className="font-bold text-[#075EE8]">${formData.weeklyRent}</span>
+                      <span className="font-bold text-[#075EE8]">{formData.weeklyRent ? `$${formData.weeklyRent}` : '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">Security Deposit:</span>
-                      <span className="font-bold text-slate-800">${formData.deposit}</span>
+                      <span className="font-bold text-slate-800">{formData.deposit ? `$${formData.deposit}` : '—'}</span>
                     </div>
                   </div>
                   <div className="pt-1 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-200/60">
-                    <span>Payment Due: <strong>{formData.paymentSchedule}</strong></span>
-                    <span>Mileage Allowance: <strong>{formData.mileageAllowance} mi/wk</strong> (${formData.excessMileageRate}/mi excess)</span>
+                    <span>Payment Due: <strong>{formData.paymentSchedule || '—'}</strong></span>
+                    <span>Mileage Allowance: <strong>{formData.mileageAllowance ? `${formData.mileageAllowance} mi/wk` : '—'}</strong> {formData.excessMileageRate ? `($${formData.excessMileageRate}/mi excess)` : ''}</span>
                   </div>
                 </div>
 
