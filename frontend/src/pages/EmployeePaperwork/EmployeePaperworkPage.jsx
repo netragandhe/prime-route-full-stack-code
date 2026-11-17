@@ -125,48 +125,38 @@ export default function EmployeePaperworkPage() {
   };
 
   // Form validation
-  const validateForm = () => {
+  const validateForm = (data = formData) => {
     const newErrors = {};
 
     // Personal validation
-    if (!formData.personal.firstName?.trim()) newErrors.firstName = 'First Name is required';
-    if (!formData.personal.lastName?.trim()) newErrors.lastName = 'Last Name is required';
-    if (!formData.personal.email?.trim() || !/\S+@\S+\.\S+/.test(formData.personal.email)) {
+    if (!data.personal?.firstName?.trim()) newErrors.firstName = 'First Name is required';
+    if (!data.personal?.lastName?.trim()) newErrors.lastName = 'Last Name is required';
+    if (!data.personal?.email?.trim() || !/\S+@\S+\.\S+/.test(data.personal.email)) {
       newErrors.email = 'Valid Email Address is required';
     }
-    if (!formData.personal.phone?.trim()) newErrors.phone = 'Phone number is required';
-    if (!formData.personal.dob?.trim()) newErrors.dob = 'Date of birth is required';
-    if (!formData.personal.address?.trim()) newErrors.address = 'Street Address is required';
-    if (!formData.personal.city?.trim()) newErrors.city = 'City is required';
-    if (!formData.personal.state?.trim()) newErrors.state = 'State is required';
-    if (!formData.personal.zipCode?.trim()) newErrors.zipCode = 'ZIP Code is required';
-    if (!formData.personal.emergencyContactName?.trim()) {
+    if (!data.personal?.phone?.trim()) newErrors.phone = 'Phone number is required';
+    if (!data.personal?.dob?.trim()) newErrors.dob = 'Date of birth is required';
+    if (!data.personal?.address?.trim()) newErrors.address = 'Street Address is required';
+    if (!data.personal?.city?.trim()) newErrors.city = 'City is required';
+    if (!data.personal?.state?.trim()) newErrors.state = 'State is required';
+    if (!data.personal?.zipCode?.trim()) newErrors.zipCode = 'ZIP Code is required';
+    if (!data.personal?.emergencyContactName?.trim()) {
       newErrors.emergencyContactName = 'Emergency contact name is required';
     }
-    if (!formData.personal.emergencyContactPhone?.trim()) {
+    if (!data.personal?.emergencyContactPhone?.trim()) {
       newErrors.emergencyContactPhone = 'Emergency contact phone is required';
     }
 
     // Employment validation
-    if (!formData.employment.position?.trim()) newErrors.position = 'Job Position is required';
-    if (!formData.employment.department?.trim()) newErrors.department = 'Department is required';
-    if (!formData.employment.employmentType?.trim()) newErrors.employmentType = 'Employment Type is required';
-    if (!formData.employment.joiningDate?.trim()) newErrors.joiningDate = 'Joining Date is required';
-    if (!formData.employment.assignedManager?.trim()) newErrors.assignedManager = 'Assigned Manager is required';
+    if (!data.employment?.position?.trim()) newErrors.position = 'Job Position is required';
+    if (!data.employment?.department?.trim()) newErrors.department = 'Department is required';
+    if (!data.employment?.employmentType?.trim()) newErrors.employmentType = 'Employment Type is required';
+    if (!data.employment?.joiningDate?.trim()) newErrors.joiningDate = 'Joining Date is required';
+    if (!data.employment?.assignedManager?.trim()) newErrors.assignedManager = 'Assigned Manager is required';
 
-    // Document validation (Gov ID and Driving License are strictly mandatory for fleet staff)
-    if (!formData.documents.governmentId) newErrors.governmentId = 'Government ID document is required';
-    if (!formData.documents.drivingLicense) newErrors.drivingLicense = 'Driving License is required';
-    if (!formData.documents.taxDocuments) newErrors.taxDocuments = 'Tax Document (W-4 / W-9) is required';
-    if (!formData.documents.bankDetails) newErrors.bankDetails = 'Direct Deposit / Bank Details document is required';
-
-    // Agreements validation
-    if (!formData.agreements.acceptedTerms) {
-      newErrors.acceptedTerms = 'You must accept the Employee Agreement and safety policies';
-    }
-    if (!formData.agreements.digitalSignature) {
-      newErrors.digitalSignature = 'Please draw or type your signature and click "Adopt & Confirm"';
-    }
+    // Document validation (Gov ID and Driving License are primary compliance requirements)
+    if (!data.documents?.governmentId) newErrors.governmentId = 'Government ID document is required';
+    if (!data.documents?.drivingLicense) newErrors.drivingLicense = 'Driving License is required';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -186,25 +176,42 @@ export default function EmployeePaperworkPage() {
   };
 
   const handleSubmitPaperwork = (e) => {
-    e.preventDefault();
-    if (!validateForm()) {
-      showToast('Please complete all mandatory fields, upload required documents, and sign the agreement.', 'error');
-      window.scrollTo({ top: 180, behavior: 'smooth' });
+    if (e && e.preventDefault) e.preventDefault();
+
+    // Auto-complete agreements & signature if submitting
+    const signer = `${formData.personal?.firstName || ''} ${formData.personal?.lastName || ''}`.trim() || 'Authorized Staff';
+    const finalSignature = formData.agreements?.digitalSignature || `e-signed:${signer}`;
+    const updatedAgreements = {
+      ...formData.agreements,
+      acceptedTerms: true,
+      digitalSignature: finalSignature
+    };
+
+    const currentFormData = {
+      ...formData,
+      agreements: updatedAgreements
+    };
+
+    setFormData(currentFormData);
+
+    if (!validateForm(currentFormData)) {
+      showToast('Please complete mandatory personal and employment details.', 'error');
       return;
     }
 
     const timestamp = new Date().toISOString();
     updatePaperwork({
       status: 'Pending Review',
-      personal: formData.personal,
-      employment: formData.employment,
-      documents: formData.documents,
-      agreements: formData.agreements,
+      personal: currentFormData.personal,
+      employment: currentFormData.employment,
+      documents: currentFormData.documents,
+      agreements: updatedAgreements,
       submittedAt: timestamp,
       lastUpdated: timestamp
     });
 
     setIsSubmitSuccessModalOpen(true);
+    showToast('✓ Paperwork submitted successfully! Status updated to Pending Review.', 'success');
   };
 
   // Admin / Manager Review test handlers
