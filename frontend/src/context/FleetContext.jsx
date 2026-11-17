@@ -17,9 +17,9 @@ import {
 const FleetContext = createContext(null);
 
 export function FleetProvider({ children }) {
-  const [rentals, setRentals] = useState(initialRentals);
-  const [vehicles, setVehicles] = useState(initialVehicles);
-  const [drivers, setDrivers] = useState(initialDrivers);
+  const [rentals, setRentals] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [inspections, setInspections] = useState(initialInspections);
   const [accidents, setAccidents] = useState(initialAccidents);
   const [isLoading, setIsLoading] = useState(false);
