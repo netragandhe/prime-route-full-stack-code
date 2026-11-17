@@ -42,16 +42,18 @@ export default function VendorDetailsModal({
   const [activeTab, setActiveTab] = useState('invoices'); // 'invoices' | 'payments' | 'spending'
   const [statusFilter, setStatusFilter] = useState('All');
 
-  if (!vendor) return null;
-
   // Tab 1: Invoices / Bills for this vendor
   const vendorInvoices = useMemo(() => {
+    if (!vendor) return [];
     const list = [];
     const vName = (vendor.name || '').toLowerCase();
 
     // From payables
     allPayables.forEach((p) => {
-      if ((p.vendor || '').toLowerCase() === vName) {
+      const isMatch =
+        (p.vendor || '').toLowerCase() === vName ||
+        (p.vendorId && String(p.vendorId) === String(vendor.rawId || vendor.id));
+      if (isMatch) {
         list.push({
           id: p.id,
           date: p.billDate || p.date,
@@ -68,7 +70,10 @@ export default function VendorDetailsModal({
 
     // From expenses
     allExpenses.forEach((e) => {
-      if ((e.vendor || '').toLowerCase() === vName) {
+      const isMatch =
+        (e.vendor || '').toLowerCase() === vName ||
+        (e.vendorId && String(e.vendorId) === String(vendor.rawId || vendor.id));
+      if (isMatch) {
         if (!list.some((item) => item.id === e.id || item.invoiceNumber === e.invoiceNumber)) {
           list.push({
             id: e.id,
@@ -85,39 +90,12 @@ export default function VendorDetailsModal({
       }
     });
 
-    // If empty or small, generate realistic historical vendor invoices
-    if (list.length < 3) {
-      list.push(
-        {
-          id: `INV-${vendor.id}-01`,
-          date: '2025-06-12',
-          dueDate: '2025-07-02',
-          category: vendor.services || 'Fleet Services',
-          description: `Contracted service delivery & scheduled cycle batch`,
-          amount: Math.round((vendor.spendYTD || 12000) * 0.35),
-          status: 'Paid',
-          invoiceNumber: `${vendor.id}-9910`,
-          source: 'Historical Clearing'
-        },
-        {
-          id: `INV-${vendor.id}-02`,
-          date: '2025-05-18',
-          dueDate: '2025-06-08',
-          category: vendor.services || 'Fleet Services',
-          description: `Regular recurring vendor settlement voucher`,
-          amount: Math.round((vendor.spendYTD || 12000) * 0.28),
-          status: 'Paid',
-          invoiceNumber: `${vendor.id}-8824`,
-          source: 'Historical Clearing'
-        }
-      );
-    }
-
     return list.sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [vendor, allPayables, allExpenses]);
 
   // Tab 2: Remittances & Payments for this vendor
   const vendorPayments = useMemo(() => {
+    if (!vendor) return [];
     return vendorInvoices
       .filter((inv) => inv.status === 'Paid' || inv.status === 'Approved for Payment' || inv.status === 'Approved')
       .map((inv, idx) => ({
@@ -136,22 +114,33 @@ export default function VendorDetailsModal({
       }));
   }, [vendorInvoices, vendor]);
 
-  // Tab 3: Monthly Spending History (6-12 Months Chart Data)
+  // Tab 3: Monthly Spending History (Derived from actual database transactions)
   const spendingChartData = useMemo(() => {
-    const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
-    const total = vendor.spendYTD || 15000;
-    const weights = [0.12, 0.15, 0.18, 0.14, 0.19, 0.22];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthSpendMap = {};
 
-    return months.map((month, idx) => {
-      const monthSpend = Math.round(total * weights[idx]);
+    vendorInvoices.forEach((inv) => {
+      if (!inv.date) return;
+      const d = new Date(inv.date);
+      if (isNaN(d.getTime())) return;
+      const mLabel = monthNames[d.getMonth()];
+      monthSpendMap[mLabel] = (monthSpendMap[mLabel] || 0) + Number(inv.amount || 0);
+    });
+
+    const activeMonths = ['Aug', 'Sep', 'Oct', 'Nov'];
+    return activeMonths.map((month) => {
+      const spend = monthSpendMap[month] || 0;
       return {
         month,
-        spend: monthSpend,
-        budget: Math.round(monthSpend * 1.1),
-        invoiceCount: idx === 5 ? vendorInvoices.length : Math.max(1, Math.round(idx + 1))
+        spend,
+        budget: Math.round(spend * 1.15) || 1000,
+        invoiceCount: vendorInvoices.filter((inv) => {
+          const d = new Date(inv.date);
+          return !isNaN(d.getTime()) && monthNames[d.getMonth()] === month;
+        }).length
       };
     });
-  }, [vendor, vendorInvoices]);
+  }, [vendorInvoices]);
 
   const totalInvoiced = vendorInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
   const totalPaid = vendorPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -163,8 +152,11 @@ export default function VendorDetailsModal({
   });
 
   const handleExportInvoices = () => {
-    exportToCsv(`${vendor.name.replace(/\s+/g, '_')}_Invoices`, vendorInvoices);
+    if (!vendor) return;
+    exportToCsv(`${(vendor.name || 'Vendor').replace(/\s+/g, '_')}_Invoices`, vendorInvoices);
   };
+
+  if (!isOpen || !vendor) return null;
 
   return (
     <Modal

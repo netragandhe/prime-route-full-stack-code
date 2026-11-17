@@ -37,9 +37,9 @@ export default function TopVehiclesCard({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100/60 text-xs">
-            {displayedTopVehicles.map((car) => (
+            {displayedTopVehicles.map((car, idx) => (
               <tr
-                key={car.id}
+                key={car.id || `top-veh-${car.rank || idx}`}
                 onClick={() => {
                   if (onViewVehicle) onViewVehicle(car);
                   else onNavigate('vehicles');

@@ -7,19 +7,22 @@ export default function InvoiceModal({
   onClose,
   onSave
 }) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const defaultDueDate = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
   const [invoice, setInvoice] = useState({
     customer: '',
-    rentalId: 'RNT-2025-095',
-    vehicle: 'Toyota Camry SE (PR-2024-TC)',
-    date: new Date().toISOString().split('T')[0],
-    dueDate: '2025-08-15',
-    subtotal: 1850,
-    tax: 148,
+    rentalId: '',
+    vehicle: '',
+    date: todayStr,
+    dueDate: defaultDueDate,
+    subtotal: '',
+    tax: '',
     discount: 0,
-    total: 1998,
+    total: '',
     status: 'Pending',
-    paymentMethod: 'Credit Card',
-    notes: 'Net 15 payment terms apply.'
+    paymentMethod: 'Corporate ACH',
+    notes: ''
   });
 
   const handleChange = (e) => {
@@ -38,7 +41,7 @@ export default function InvoiceModal({
     e.preventDefault();
     onSave({
       ...invoice,
-      id: `INV-2025-${Math.floor(Math.random() * 900 + 100)}`
+      id: `INV-2026-${Math.floor(Math.random() * 900 + 100)}`
     });
     onClose();
   };

@@ -28,7 +28,7 @@ export default function RefundsTable({
     category: 'Security Deposit Refund',
     amount: '',
     method: 'Direct ACH Refund',
-    reason: 'Vehicle lease concluded; deposit refunded.',
+    reason: '',
     date: new Date().toISOString().split('T')[0]
   });
 

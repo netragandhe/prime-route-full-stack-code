@@ -3,6 +3,7 @@ import {
   ShieldAlert,
   FileCheck,
   Edit2,
+  Trash2,
   DollarSign,
   Car,
   User,
@@ -17,16 +18,18 @@ import { formatCurrency, formatDate } from '../../../utils/formatters';
 export default function ClaimsView({
   claims,
   onEditClaim,
+  onDeleteClaim,
   onResetFilters,
+  onFileClaim
 }) {
   if (claims.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] overflow-hidden">
         <EmptyState
           title="No insurance claims recorded"
-          description="No active or settled claims match your criteria."
-          actionText="Reset All Filters"
-          onAction={onResetFilters}
+          description="Your claims ledger is clean. Click '+ File Insurance Claim' above to submit a carrier claim."
+          actionText={onFileClaim ? '+ File Insurance Claim' : 'Reset All Filters'}
+          onAction={onFileClaim || onResetFilters}
         />
       </div>
     );
@@ -117,13 +120,24 @@ export default function ClaimsView({
                 </td>
 
                 <td className="py-3.5 px-4 text-right">
-                  <button
-                    onClick={() => onEditClaim(claim)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                    title="Edit Claim Record"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => onEditClaim(claim)}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                      title="Edit Claim Record"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    {onDeleteClaim && (
+                      <button
+                        onClick={() => onDeleteClaim(claim)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Claim Record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

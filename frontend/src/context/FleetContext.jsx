@@ -61,9 +61,30 @@ export function FleetProvider({ children }) {
 
   // Helper: Update vehicle status (e.g. 'Available', 'Rented', 'Maintenance') and optionally assign/unassign driver & update mileage
   const updateVehicleStatus = useCallback((vehicleIdOrPlate, newStatus, driverName = null, newMileage = null) => {
+    const rawNum = !isNaN(Number(vehicleIdOrPlate))
+      ? Number(vehicleIdOrPlate)
+      : String(vehicleIdOrPlate).toUpperCase().startsWith('VEH-')
+      ? parseInt(String(vehicleIdOrPlate).toUpperCase().replace('VEH-', ''), 10)
+      : null;
+
     setVehicles((prev) =>
       prev.map((v) => {
-        if (v.id === vehicleIdOrPlate || v.plate === vehicleIdOrPlate || v.name === vehicleIdOrPlate) {
+        const vRawNum = !isNaN(Number(v.id))
+          ? Number(v.id)
+          : String(v.id).toUpperCase().startsWith('VEH-')
+          ? parseInt(String(v.id).toUpperCase().replace('VEH-', ''), 10)
+          : v.dbId || null;
+
+        const idMatches =
+          v.id === vehicleIdOrPlate ||
+          String(v.id) === String(vehicleIdOrPlate) ||
+          (rawNum !== null && vRawNum !== null && rawNum === vRawNum);
+
+        if (
+          idMatches ||
+          v.plate === vehicleIdOrPlate ||
+          v.name === vehicleIdOrPlate
+        ) {
           const updated = {
             ...v,
             status: newStatus,

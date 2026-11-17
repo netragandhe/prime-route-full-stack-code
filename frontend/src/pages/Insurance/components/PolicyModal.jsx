@@ -8,20 +8,19 @@ export default function PolicyModal({
   onSave,
   policy = null
 }) {
-  const [formData, setFormData] = useState({
+  const getInitialForm = () => ({
     insurer: '',
     policyNumber: '',
     coverage: '',
-    coverageType: 'Full Comprehensive & Liability',
-    premium: 12000,
-    premiumFormatted: '',
+    coverageType: 'Full Comprehensive & Collision',
+    premium: '',
     deductible: '$1,000 Collision / $1,000 Comp',
     deductibleTerms: '$1,000 Deductible',
     effectiveDate: new Date().toISOString().split('T')[0],
     expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     vehiclesCovered: 'All Fleet Vehicles',
     status: 'Active',
-    documents: [{ name: 'Master_Policy_Document.pdf', size: '2.5 MB' }],
+    documents: [],
     contacts: {
       agentName: '',
       phone: '',
@@ -30,32 +29,13 @@ export default function PolicyModal({
     }
   });
 
+  const [formData, setFormData] = useState(getInitialForm);
+
   useEffect(() => {
     if (policy) {
       setFormData(policy);
     } else {
-      setFormData({
-        id: `POL-${Date.now()}`,
-        insurer: 'Travelers Commercial Auto & Marine',
-        policyNumber: `TRV-${Math.floor(1000000 + Math.random() * 9000000)}`,
-        coverage: '$1,000,000 Combined Single Limit (CSL) Liability, Comprehensive & Collision',
-        coverageType: 'Commercial Fleet Master Policy',
-        premium: 24000,
-        premiumFormatted: '$24,000 / year ($2,000 / month)',
-        deductible: '$1,000 Collision / $1,000 Comprehensive',
-        deductibleTerms: '$1,000 Collision Deductible',
-        effectiveDate: new Date().toISOString().split('T')[0],
-        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        vehiclesCovered: 65,
-        status: 'Active',
-        documents: [{ name: 'Commercial_Fleet_Policy_2025.pdf', size: '3.2 MB', uploadDate: new Date().toISOString().split('T')[0] }],
-        contacts: {
-          agentName: 'Arthur Pendelton',
-          phone: '+1 (800) 555-8728',
-          email: 'commercial.claims@travelers.com',
-          broker: 'Aon Risk Solutions'
-        }
-      });
+      setFormData(getInitialForm());
     }
   }, [policy, isOpen]);
 

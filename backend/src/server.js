@@ -1,3 +1,8 @@
+// Ensure BigInt values (from MySQL bigIncrements/Prisma) serialize cleanly to JSON
+BigInt.prototype.toJSON = function () {
+  return Number(this);
+};
+
 const app = require('./app');
 const env = require('./config/env');
 const db = require('./config/db');

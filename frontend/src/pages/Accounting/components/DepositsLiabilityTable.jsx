@@ -8,19 +8,36 @@ import {
   DollarSign,
   AlertTriangle,
   RotateCcw,
-  ArrowUpRight
+  ArrowUpRight,
+  Plus
 } from 'lucide-react';
 import StatusBadge from '../../../components/common/StatusBadge';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { exportToCsv } from '../../../utils/exportCsv';
+import Modal from '../../../components/common/Modal';
+import { FormInput, FormSelect, FormTextarea } from '../../../components/forms/FormInputs';
 
 export default function DepositsLiabilityTable({
   deposits = [],
   onReleaseDeposit,
-  onOpenReverseModal
+  onOpenReverseModal,
+  onAddDeposit,
+  drivers = [],
+  rentals = []
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isAddDepositOpen, setIsAddDepositOpen] = useState(false);
+  const [releasingDeposit, setReleasingDeposit] = useState(null);
+
+  const [newDeposit, setNewDeposit] = useState({
+    driver: '',
+    contractId: '',
+    vehicle: '',
+    depositAmount: '',
+    heldDate: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
 
   const filteredDeposits = deposits.filter((d) => {
     const q = searchQuery.toLowerCase();
@@ -33,11 +50,47 @@ export default function DepositsLiabilityTable({
   });
 
   const totalHeldLiability = deposits
-    .filter((d) => d.status !== 'Refunded / Released')
-    .reduce((sum, d) => sum + Number(d.balance || d.depositAmount || 0), 0);
+    .filter(
+      (d) =>
+        d.status !== 'Refunded / Released' &&
+        d.status !== 'Reversed' &&
+        d.status !== 'Reversed & Offset'
+    )
+    .reduce((sum, d) => {
+      const bal = Number(
+        d.balance !== undefined && d.balance !== null ? d.balance : d.depositAmount || 0
+      );
+      return sum + (bal > 0 ? bal : 0);
+    }, 0);
 
   const handleExport = () => {
     exportToCsv('PrimeRoute_Deposits_Escrow_Liability', filteredDeposits);
+  };
+
+  const handleCreateDeposit = (e) => {
+    e.preventDefault();
+    if (!newDeposit.driver || !newDeposit.depositAmount) return;
+
+    if (onAddDeposit) {
+      onAddDeposit({
+        driver: newDeposit.driver,
+        contractId: newDeposit.contractId || 'RNT-2024-089',
+        vehicle: newDeposit.vehicle || 'Commercial Fleet Vehicle',
+        depositAmount: Number(newDeposit.depositAmount),
+        heldDate: newDeposit.heldDate,
+        notes: newDeposit.notes
+      });
+    }
+
+    setIsAddDepositOpen(false);
+    setNewDeposit({
+      driver: '',
+      contractId: '',
+      vehicle: '',
+      depositAmount: '',
+      heldDate: new Date().toISOString().split('T')[0],
+      notes: ''
+    });
   };
 
   return (
@@ -114,6 +167,12 @@ export default function DepositsLiabilityTable({
             >
               <Download className="w-3.5 h-3.5 text-slate-500" /> Export CSV
             </button>
+            <button
+              onClick={() => setIsAddDepositOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md shadow-amber-600/20 transition-all cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" /> Collect Security Deposit
+            </button>
             <div className="w-56">
               <input
                 type="text"
@@ -181,21 +240,30 @@ export default function DepositsLiabilityTable({
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {d.status !== 'Refunded / Released' && (
-                        <button
-                          onClick={() => onReleaseDeposit(d.id)}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs cursor-pointer"
-                        >
-                          Release / Refund
-                        </button>
+                      {d.balance > 0 &&
+                      d.status !== 'Refunded / Released' &&
+                      d.status !== 'Reversed' &&
+                      d.status !== 'Reversed & Offset' ? (
+                        <>
+                          <button
+                            onClick={() => setReleasingDeposit(d)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                          >
+                            Release / Refund
+                          </button>
+                          <button
+                            onClick={() => onOpenReverseModal(d)}
+                            title="Reverse / Correct Escrow Entry"
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                          Settled / Closed
+                        </span>
                       )}
-                      <button
-                        onClick={() => onOpenReverseModal(d)}
-                        title="Reverse / Correct Escrow Entry"
-                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -204,6 +272,205 @@ export default function DepositsLiabilityTable({
           </table>
         </div>
       </div>
+
+      {/* Collect Security Deposit Modal */}
+      <Modal
+        isOpen={isAddDepositOpen}
+        onClose={() => setIsAddDepositOpen(false)}
+        title="Collect Customer Security Deposit (Escrow)"
+        subtitle="Record refundable security deposit in balance sheet escrow account 2100"
+        maxWidth="max-w-lg"
+      >
+        <form onSubmit={handleCreateDeposit} className="space-y-4">
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p>
+              Security deposits are segregated trust liabilities. This amount will be credited to <strong>Account 2100</strong> and strictly excluded from operational rental revenue.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Driver / Lessee *</label>
+              {drivers.length > 0 ? (
+                <select
+                  value={newDeposit.driver}
+                  onChange={(e) => {
+                    const selDriver = e.target.value;
+                    const r = rentals.find((rent) => rent.driver === selDriver || rent.driverName === selDriver);
+                    setNewDeposit((prev) => ({
+                      ...prev,
+                      driver: selDriver,
+                      contractId: r?.contract_no || r?.contractId || prev.contractId,
+                      vehicle: r?.vehicle || prev.vehicle
+                    }));
+                  }}
+                  required
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                >
+                  <option value="">Select Driver</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={`${d.first_name || ''} ${d.last_name || ''}`.trim() || d.name}>
+                      {`${d.first_name || ''} ${d.last_name || ''}`.trim() || d.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <FormInput
+                  label="Driver Name"
+                  value={newDeposit.driver}
+                  onChange={(e) => setNewDeposit((p) => ({ ...p, driver: e.target.value }))}
+                  required
+                />
+              )}
+            </div>
+
+            <FormInput
+              label="Contract Reference *"
+              value={newDeposit.contractId}
+              onChange={(e) => setNewDeposit((p) => ({ ...p, contractId: e.target.value }))}
+              placeholder="e.g. RNT-2024-090"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormInput
+              label="Assigned Vehicle Unit"
+              value={newDeposit.vehicle}
+              onChange={(e) => setNewDeposit((p) => ({ ...p, vehicle: e.target.value }))}
+              placeholder="e.g. Toyota Camry (PR-2024-TC)"
+            />
+
+            <FormInput
+              label="Deposit Amount ($) *"
+              type="number"
+              step="0.01"
+              value={newDeposit.depositAmount}
+              onChange={(e) => setNewDeposit((p) => ({ ...p, depositAmount: e.target.value }))}
+              placeholder="500.00"
+              required
+            />
+          </div>
+
+          <FormInput
+            label="Held Date *"
+            type="date"
+            value={newDeposit.heldDate}
+            onChange={(e) => setNewDeposit((p) => ({ ...p, heldDate: e.target.value }))}
+            required
+          />
+
+          <FormTextarea
+            label="Escrow Custody Notes & Terms"
+            value={newDeposit.notes}
+            onChange={(e) => setNewDeposit((p) => ({ ...p, notes: e.target.value }))}
+            placeholder="Escrow custody terms, vehicle return condition..."
+            rows={2}
+          />
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsAddDepositOpen(false)}
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-md shadow-amber-600/20 transition-all cursor-pointer"
+            >
+              Save Escrow Deposit
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Release / Refund Escrow Confirmation Modal */}
+      {releasingDeposit && (
+        <Modal
+          isOpen={!!releasingDeposit}
+          onClose={() => setReleasingDeposit(null)}
+          title="Confirm Security Deposit Release & Refund"
+          subtitle={`Disburse escrow funds held for ${releasingDeposit.driver}`}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900 space-y-1">
+                <p className="font-bold">Are you sure you want to release this escrow deposit?</p>
+                <p className="leading-relaxed">
+                  This action will release{' '}
+                  <strong>
+                    {formatCurrency(
+                      releasingDeposit.balance !== undefined && releasingDeposit.balance !== null
+                        ? Number(releasingDeposit.balance)
+                        : Number(releasingDeposit.depositAmount || 0)
+                    )}
+                  </strong>{' '}
+                  from escrow liabilities (Account 2100) and record an outward disbursement refund to
+                  the driver.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Deposit ID:</span>
+                <span className="font-mono font-bold text-[#075EE8]">{releasingDeposit.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Driver / Lessee:</span>
+                <span className="font-bold text-slate-800">{releasingDeposit.driver}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Contract Reference:</span>
+                <span className="font-mono text-slate-700">
+                  {releasingDeposit.contractId || releasingDeposit.rental_code || 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Assigned Vehicle:</span>
+                <span className="text-slate-700">
+                  {releasingDeposit.vehicle || 'Commercial Fleet Unit'}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-2 font-bold">
+                <span className="text-slate-700">Refund Amount:</span>
+                <span className="text-emerald-600 text-sm font-extrabold">
+                  {formatCurrency(
+                    releasingDeposit.balance !== undefined && releasingDeposit.balance !== null
+                      ? Number(releasingDeposit.balance)
+                      : Number(releasingDeposit.depositAmount || 0)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setReleasingDeposit(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onReleaseDeposit(releasingDeposit.id);
+                  setReleasingDeposit(null);
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/25 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Confirm &amp; Release Refund
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

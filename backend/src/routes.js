@@ -7,6 +7,10 @@ const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const vehiclesRoutes = require('./modules/vehicles/vehicles.routes');
 const driversRoutes = require('./modules/drivers/drivers.routes');
 const rentalsRoutes = require('./modules/rentals/rentals.routes');
+const insuranceRoutes = require('./modules/insurance/insurance.routes');
+const accountingRoutes = require('./modules/accounting/accounting.routes');
+const vendorsRoutes = require('./modules/vendors/vendors.routes');
+const maintenanceRoutes = require('./modules/maintenance/maintenance.routes');
 
 router.get('/health', async (req, res, next) => {
   try {
@@ -34,5 +38,9 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/vehicles', vehiclesRoutes);
 router.use('/drivers', driversRoutes);
 router.use('/rentals', rentalsRoutes);
+router.use('/insurance', insuranceRoutes);
+router.use('/accounting', accountingRoutes);
+router.use('/vendors', vendorsRoutes);
+router.use('/maintenance', maintenanceRoutes);
 
 module.exports = router;

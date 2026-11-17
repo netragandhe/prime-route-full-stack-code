@@ -9,7 +9,8 @@ import {
   KeyRound,
   FileCheck,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import EmptyState from '../../../components/common/EmptyState';
 import { formatDate } from '../../../utils/formatters';
@@ -17,6 +18,7 @@ import { formatDate } from '../../../utils/formatters';
 export default function ComplianceTable({
   items,
   onRenewItem,
+  onDeleteItem,
   onResetFilters
 }) {
   if (items.length === 0) {
@@ -139,14 +141,25 @@ export default function ComplianceTable({
                 </td>
 
                 <td className="py-3.5 px-4 text-right">
-                  <button
-                    onClick={() => onRenewItem(item)}
-                    className="px-3 py-1.5 text-xs font-bold text-[#075EE8] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition-all inline-flex items-center gap-1 cursor-pointer active:scale-95"
-                    title="Renew Compliance Record"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Renew
-                  </button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => onRenewItem(item)}
+                      className="px-3 py-1.5 text-xs font-bold text-[#075EE8] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition-all inline-flex items-center gap-1 cursor-pointer active:scale-95"
+                      title="Renew Compliance Record"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Renew
+                    </button>
+                    {onDeleteItem && (
+                      <button
+                        onClick={() => onDeleteItem(item)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 hover:border-rose-200 transition-all cursor-pointer"
+                        title="Delete Compliance Record"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

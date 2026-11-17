@@ -25,7 +25,7 @@ export default function CreditsAdjustmentsTable({
 
   const [newCredit, setNewCredit] = useState({
     driver: '',
-    rental: 'RNT-2024-089',
+    rental: '',
     type: 'Goodwill Discount',
     amount: '',
     reason: '',

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Wrench,
   Clock,
@@ -20,24 +20,36 @@ import {
   Gauge,
   PowerOff,
   Car,
-  AlertCircle
+  AlertCircle,
+  RotateCw
 } from 'lucide-react';
 import StatCard from '../../components/common/StatCard';
 import SearchBar from '../../components/common/SearchBar';
 import StatusBadge from '../../components/common/StatusBadge';
 import EmptyState from '../../components/common/EmptyState';
+import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import Modal from '../../components/common/Modal';
 import MaintenanceModal from './MaintenanceModal';
-import { initialMaintenance, initialSettings } from '../../data/mockData';
 import { exportToCsv } from '../../utils/exportCsv';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useFleet } from '../../context/FleetContext';
+import { maintenanceApi } from '../../api/maintenanceApi';
+import { vendorsApi } from '../../api/vendorsApi';
 import Can from '../../auth/Can';
 
 export default function MaintenancePage() {
   const { vehicles = [], updateVehicleStatus } = useFleet();
-  const [records, setRecords] = useState(initialMaintenance);
+  const [records, setRecords] = useState([]);
+  const [liveStats, setLiveStats] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(new Date());
+
   const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'overdue' | 'duesoon' | 'scheduled' | 'inprogress' | 'completed'
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,20 +61,54 @@ export default function MaintenancePage() {
   const [toastMessage, setToastMessage] = useState(null);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const defaultInterval = initialSettings?.maintenanceIntervals?.oilChangeMiles || 5000;
+  const defaultInterval = 5000;
+
+  // Load live data from MySQL
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
+    else setIsRefreshing(true);
+    setFetchError(null);
+
+    try {
+      const [recs, statsData, vendorsData] = await Promise.all([
+        maintenanceApi.getMaintenanceRecords(),
+        maintenanceApi.getMaintenanceStats().catch(() => null),
+        vendorsApi.getVendors().catch(() => ({ vendors: [] }))
+      ]);
+
+      setRecords(recs || []);
+      if (statsData) setLiveStats(statsData);
+      if (vendorsData?.vendors) setVendors(vendorsData.vendors);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error('Failed to load maintenance records:', err);
+      setFetchError(err.message || 'Failed to load maintenance records from server');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Helper: Determine if a maintenance record is Overdue, Due Soon, Scheduled, In Progress, or Completed
   const getRecordDueState = (record) => {
-    if (record.status === 'Completed') return { badge: 'Completed', color: 'emerald', icon: 'check' };
-    if (record.status === 'In Progress') return { badge: 'In Progress', color: 'amber', icon: 'clock' };
+    if (record.status === 'Completed' || record.dbStatus === 'completed') {
+      return { badge: 'Completed', color: 'emerald', icon: 'check' };
+    }
+    if (record.status === 'In Progress' || record.dbStatus === 'in_progress') {
+      return { badge: 'In Progress', color: 'blue', icon: 'clock' };
+    }
 
-    const targetDate = record.nextServiceDate || record.serviceDate;
+    const targetDate = record.serviceDate || record.nextServiceDate;
     const isPastDate = targetDate && targetDate < todayStr;
 
     // Check mileage comparison if current vehicle mileage exists
     const veh = vehicles.find(
       (v) =>
-        (record.vehicleId && v.id === record.vehicleId) ||
+        (record.vehicleId && (v.id === record.vehicleId || String(v.id) === String(record.vehicleId))) ||
         (record.plate && v.plate === record.plate) ||
         v.name === record.vehicle ||
         `${v.make} ${v.model}` === record.vehicle
@@ -90,7 +136,7 @@ export default function MaintenancePage() {
     return { badge: record.status || 'Scheduled', color: 'blue', icon: 'clock' };
   };
 
-  // Requirement 5: Calculate KPI counts & amounts
+  // Live KPI statistics computed from records or backend stats
   const stats = useMemo(() => {
     let overdueCount = 0;
     let dueSoonCount = 0;
@@ -110,15 +156,15 @@ export default function MaintenancePage() {
     });
 
     return {
-      overdueCount,
-      dueSoonCount,
-      scheduledCount,
-      inProgressCount,
-      completedCount,
-      totalCost,
+      overdueCount: liveStats?.overdueCount !== undefined ? liveStats.overdueCount : overdueCount,
+      dueSoonCount: liveStats?.dueSoonCount !== undefined ? liveStats.dueSoonCount : dueSoonCount,
+      scheduledCount: liveStats?.scheduledCount !== undefined ? liveStats.scheduledCount : scheduledCount,
+      inProgressCount: liveStats?.inProgressCount !== undefined ? liveStats.inProgressCount : inProgressCount,
+      completedCount: liveStats?.completedCount !== undefined ? liveStats.completedCount : completedCount,
+      totalCost: liveStats?.totalCost !== undefined ? liveStats.totalCost : totalCost,
       totalRecords: records.length
     };
-  }, [records, vehicles, todayStr, defaultInterval]);
+  }, [records, liveStats, vehicles, todayStr]);
 
   // Filter records based on activeTab and search
   const filteredRecords = useMemo(() => {
@@ -131,6 +177,7 @@ export default function MaintenancePage() {
       const id = (r.id || '').toLowerCase();
 
       const matchesSearch =
+        !q ||
         vehName.includes(q) ||
         plate.includes(q) ||
         type.includes(q) ||
@@ -145,57 +192,126 @@ export default function MaintenancePage() {
       if (activeTab === 'overdue') return state.badge === 'Overdue';
       if (activeTab === 'duesoon') return state.badge === 'Due Soon';
       if (activeTab === 'scheduled') return state.badge === 'Scheduled' || r.status === 'Scheduled';
-      if (activeTab === 'inprogress') return r.status === 'In Progress';
-      if (activeTab === 'completed') return r.status === 'Completed';
+      if (activeTab === 'inprogress') return r.status === 'In Progress' || r.dbStatus === 'in_progress';
+      if (activeTab === 'completed') return r.status === 'Completed' || r.dbStatus === 'completed';
 
       return true;
     });
   }, [records, searchQuery, activeTab, vehicles, todayStr]);
 
-  // Requirement 7: Authorized "Mark vehicle unavailable" action
-  const handleToggleVehicleAvailability = (record) => {
-    const veh = vehicles.find(
-      (v) =>
-        (record.vehicleId && v.id === record.vehicleId) ||
-        (record.plate && v.plate === record.plate) ||
-        v.name === record.vehicle ||
-        `${v.make} ${v.model}` === record.vehicle
+  // Authorized "Mark vehicle unavailable" action
+  const handleToggleVehicleAvailability = async (record) => {
+    const isCurrentlyUnavailable =
+      (record.vehicleStatus || '').toLowerCase() === 'maintenance' ||
+      (record.vehicleStatus || '').toLowerCase() === 'unavailable';
+    const nextStatus = isCurrentlyUnavailable ? 'available' : 'maintenance';
+    const targetIdOrPlate = record.vehicleId || record.plate;
+
+    // 1. Instant optimistic state update
+    setRecords((prev) =>
+      prev.map((item) =>
+        item.vehicleId === record.vehicleId || item.plate === record.plate
+          ? { ...item, vehicleStatus: nextStatus }
+          : item
+      )
     );
 
-    const targetIdOrPlate = veh ? veh.id : (record.plate || record.vehicle);
-    const isCurrentlyUnavailable = veh?.status === 'Unavailable' || veh?.status === 'Maintenance';
+    if (updateVehicleStatus) {
+      updateVehicleStatus(
+        targetIdOrPlate,
+        nextStatus === 'available' ? 'Available' : 'Maintenance'
+      );
+    }
 
-    if (isCurrentlyUnavailable) {
-      // Restore to Available
-      updateVehicleStatus(targetIdOrPlate, 'Available');
-      setToastMessage(`✓ Vehicle ${record.plate || record.vehicle} restored to "Available" for active rentals.`);
-    } else {
-      // Mark Unavailable
-      updateVehicleStatus(targetIdOrPlate, 'Unavailable');
-      setToastMessage(`⚠️ Vehicle ${record.plate || record.vehicle} set to "Unavailable" (pulled from rental intake for workshop maintenance).`);
+    setToastMessage(
+      nextStatus === 'available'
+        ? `✓ Vehicle ${record.plate || record.vehicle} restored to "Available" for active rentals.`
+        : `⚠️ Vehicle ${record.plate || record.vehicle} set to "Maintenance" (pulled from rental intake).`
+    );
+
+    try {
+      await maintenanceApi.toggleVehicleAvailability(targetIdOrPlate, nextStatus);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to toggle vehicle availability:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to update vehicle status'}`);
+      await loadData(true);
     }
 
     setTimeout(() => setToastMessage(null), 5000);
   };
 
-  const handleSaveRecord = (rec) => {
-    if (editingRecord) {
-      setRecords((prev) => prev.map((r) => (r.id === rec.id ? rec : r)));
-      setToastMessage(`Maintenance job ${rec.id} updated successfully.`);
-    } else {
-      setRecords((prev) => [rec, ...prev]);
-      setToastMessage(`Maintenance job ${rec.id} scheduled for ${rec.vehicle}.`);
+  const handleStartService = async (record) => {
+    setIsSubmitting(true);
+    try {
+      await maintenanceApi.updateMaintenanceRecord(record.rawId || record.id, {
+        status: 'in_progress'
+      });
+      setToastMessage(`✓ Work order ${record.id} started. Vehicle placed in workshop bay.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to start service:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to start service'}`);
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setToastMessage(null), 5000);
     }
-    setEditingRecord(null);
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleDeleteRecord = () => {
-    if (deletingRecord) {
-      setRecords((prev) => prev.filter((r) => r.id !== deletingRecord.id));
-      setToastMessage(`Maintenance record ${deletingRecord.id} removed.`);
+  const handleCompleteService = async (record) => {
+    setIsSubmitting(true);
+    try {
+      await maintenanceApi.updateMaintenanceRecord(record.rawId || record.id, {
+        status: 'completed',
+        serviceDate: new Date().toISOString().split('T')[0]
+      });
+      setToastMessage(`✓ Work order ${record.id} completed. Vehicle certified and restored to Available.`);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to complete service:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to complete service'}`);
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setToastMessage(null), 5000);
+    }
+  };
+
+  const handleSaveRecord = async (rec) => {
+    setIsSubmitting(true);
+    try {
+      if (editingRecord) {
+        await maintenanceApi.updateMaintenanceRecord(editingRecord.rawId || editingRecord.id, rec);
+        setToastMessage(`Maintenance job ${rec.id || editingRecord.id} updated successfully in MySQL.`);
+      } else {
+        await maintenanceApi.createMaintenanceRecord(rec);
+        setToastMessage(`Maintenance job scheduled for ${rec.vehicle || 'Fleet Vehicle'} and saved in database.`);
+      }
+      setIsModalOpen(false);
+      setEditingRecord(null);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to save maintenance job:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to save maintenance record'}`);
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setToastMessage(null), 5000);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!deletingRecord) return;
+    setIsSubmitting(true);
+    try {
+      await maintenanceApi.deleteMaintenanceRecord(deletingRecord.rawId || deletingRecord.id);
+      setToastMessage(`Maintenance record ${deletingRecord.id} permanently removed from database.`);
       setDeletingRecord(null);
-      setTimeout(() => setToastMessage(null), 4000);
+      await loadData(true);
+    } catch (err) {
+      console.error('Failed to delete record:', err);
+      setToastMessage(`Error: ${err.message || 'Failed to delete maintenance record'}`);
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setToastMessage(null), 5000);
     }
   };
 
@@ -218,6 +334,20 @@ export default function MaintenancePage() {
     );
   };
 
+  if (isLoading && records.length === 0) {
+    return <LoadingState message="Connecting to MySQL and loading live fleet maintenance work orders..." />;
+  }
+
+  if (fetchError && records.length === 0) {
+    return (
+      <ErrorState
+        title="Unable to load maintenance records"
+        message={fetchError}
+        onRetry={() => loadData()}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 animate-slide-up duration-300">
       {/* Page Header */}
@@ -227,6 +357,9 @@ export default function MaintenancePage() {
             <h1 className="text-2xl font-black text-[#0A1E42] tracking-tight">Fleet Maintenance &amp; Work Orders</h1>
             <span className="text-xs font-bold px-3 py-1 rounded-xl bg-blue-50 text-[#075EE8] border border-blue-100 shadow-2xs">
               {defaultInterval.toLocaleString()} mi Standard Interval
+            </span>
+            <span className="text-xs font-bold px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Live MySQL Connected
             </span>
             {stats.overdueCount > 0 && (
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 animate-pulse">
@@ -240,6 +373,17 @@ export default function MaintenancePage() {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+          {/* Refresh Button */}
+          <button
+            onClick={() => loadData(true)}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+            title={`Last refreshed at ${lastRefreshed.toLocaleTimeString()}`}
+          >
+            <RotateCw className={`w-3.5 h-3.5 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
           {/* View Toggle (Cards vs Table) */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
@@ -249,7 +393,7 @@ export default function MaintenancePage() {
                   ? 'bg-white text-[#0A1E42] shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
-              title="Card Grid View (Client Mockup)"
+              title="Card Grid View"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               <span>Cards</span>
@@ -276,7 +420,7 @@ export default function MaintenancePage() {
             <span>Export CSV</span>
           </button>
 
-          {/* Requirement 7: Schedule Maintenance Button */}
+          {/* Schedule Maintenance Button */}
           <Can module="maintenance" do="add">
             <button
               onClick={() => {
@@ -308,7 +452,7 @@ export default function MaintenancePage() {
         </div>
       )}
 
-      {/* Requirement 5: KPI Stats */}
+      {/* KPI Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Overdue Card */}
         <StatCard
@@ -412,7 +556,7 @@ export default function MaintenancePage() {
         </div>
       </div>
 
-      {/* Requirement 6: Cards Like the Client Mockup */}
+      {/* Cards View vs Table View */}
       {viewMode === 'cards' ? (
         filteredRecords.length === 0 ? (
           <EmptyState
@@ -434,22 +578,16 @@ export default function MaintenancePage() {
                 vehicles.find((v) => v.name === r.vehicle || `${v.make} ${v.model}` === r.vehicle) ||
                 null;
 
-              const vehicleTitle = veh ? `${veh.year} ${veh.make} ${veh.model}` : r.vehicle;
+              const vehicleTitle = veh ? `${veh.year || ''} ${veh.make} ${veh.model}`.trim() : r.vehicle;
               const vehiclePlate = r.plate || veh?.plate || 'PR-FLEET';
               const vehicleId = veh?.id || r.vehicleId || r.id;
-              const currentVehicleStatus = veh?.status || 'Available';
+              const currentVehicleStatus = r.vehicleStatus || veh?.status || 'Available';
               const isVehicleUnavailable =
-                currentVehicleStatus === 'Unavailable' || currentVehicleStatus === 'Maintenance';
+                currentVehicleStatus.toLowerCase() === 'maintenance' ||
+                currentVehicleStatus.toLowerCase() === 'unavailable';
 
-              const cleanOdo = r.odometer
-                ? Number(String(r.odometer).replace(/[^0-9]/g, ''))
-                : r.mileage
-                ? Number(String(r.mileage).replace(/[^0-9]/g, ''))
-                : 25000;
-
-              const cleanNextOdo = r.nextServiceMileage
-                ? Number(String(r.nextServiceMileage).replace(/[^0-9]/g, ''))
-                : cleanOdo + defaultInterval;
+              const cleanOdo = Number(r.odometer || 0);
+              const cleanNextOdo = Number(r.nextServiceMileage || cleanOdo + defaultInterval);
 
               const percentOdo = Math.min(
                 100,
@@ -481,10 +619,10 @@ export default function MaintenancePage() {
                           {vehiclePlate}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border capitalize ${
                             isVehicleUnavailable
                               ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : currentVehicleStatus === 'Rented'
+                              : currentVehicleStatus === 'rented' || currentVehicleStatus === 'Rented'
                               ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}
@@ -538,7 +676,7 @@ export default function MaintenancePage() {
                       <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">{r.provider || 'Fleet Workshop'}</span>
                       <span className="text-slate-300">•</span>
-                      <span className="text-slate-500 shrink-0">{r.category || 'Maintenance'}</span>
+                      <span className="text-slate-500 shrink-0">{r.category || 'Mechanical'}</span>
                     </div>
 
                     {/* Service & Due Date Details Box */}
@@ -580,7 +718,7 @@ export default function MaintenancePage() {
                               : 'text-slate-700'
                           }`}
                         >
-                          {formatDate(r.nextServiceDate || r.serviceDate)}
+                          {formatDate(r.serviceDate || r.nextServiceDate)}
                         </span>
                       </div>
 
@@ -614,35 +752,57 @@ export default function MaintenancePage() {
                   {/* Card Bottom Meta & Actions */}
                   <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-4">
                     {/* Left Side: Context Badge or Availability Control */}
-                    <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {dueState.badge === 'Completed' ? (
                         <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/70 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <span>Service Cleared</span>
                         </span>
                       ) : dueState.badge === 'In Progress' ? (
-                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/70 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                          <Wrench className="w-3.5 h-3.5 text-[#075EE8] shrink-0" />
-                          <span>In Workshop Bay</span>
-                        </span>
+                        <>
+                          <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/70 px-2 py-1 rounded-lg flex items-center gap-1 shadow-2xs">
+                            <Wrench className="w-3.5 h-3.5 text-[#075EE8] shrink-0" />
+                            <span>In Bay</span>
+                          </span>
+                          <Can module="maintenance" do="edit">
+                            <button
+                              onClick={() => handleCompleteService(r)}
+                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                              title="Mark work order completed and restore vehicle to Available"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Complete</span>
+                            </button>
+                          </Can>
+                        </>
                       ) : (
                         <Can module="maintenance" do="edit">
-                          <button
-                            onClick={() => handleToggleVehicleAvailability(r)}
-                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 ${
-                              isVehicleUnavailable
-                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-                            }`}
-                            title={
-                              isVehicleUnavailable
-                                ? 'Restore vehicle status to Available'
-                                : 'Pull vehicle from rental intake and set status to Unavailable'
-                            }
-                          >
-                            <PowerOff className="w-3.5 h-3.5 shrink-0" />
-                            <span>{isVehicleUnavailable ? 'Restore Available' : 'Pull From Intake'}</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleStartService(r)}
+                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                              title="Start service and move to workshop bay"
+                            >
+                              <Wrench className="w-3 h-3" />
+                              <span>Start</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleVehicleAvailability(r)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1 ${
+                                isVehicleUnavailable
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                              }`}
+                              title={
+                                isVehicleUnavailable
+                                  ? 'Restore vehicle status to Available'
+                                  : 'Pull vehicle from rental intake and set status to Maintenance'
+                              }
+                            >
+                              <PowerOff className="w-3 h-3 shrink-0" />
+                              <span>{isVehicleUnavailable ? 'Restore Available' : 'Pull Intake'}</span>
+                            </button>
+                          </div>
                         </Can>
                       )}
                     </div>
@@ -716,8 +876,10 @@ export default function MaintenancePage() {
                       v.name === r.vehicle ||
                       `${v.make} ${v.model}` === r.vehicle
                   );
+                  const currentVehicleStatus = r.vehicleStatus || veh?.status || 'Available';
                   const isVehicleUnavailable =
-                    veh?.status === 'Unavailable' || veh?.status === 'Maintenance';
+                    currentVehicleStatus.toLowerCase() === 'maintenance' ||
+                    currentVehicleStatus.toLowerCase() === 'unavailable';
 
                   return (
                     <tr key={r.id} className="hover:bg-blue-50/20 transition-colors group">
@@ -783,24 +945,40 @@ export default function MaintenancePage() {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Requirement 7: Authorized Mark Unavailable Action */}
                           <Can module="maintenance" do="edit">
                             {dueState.badge === 'Completed' ? (
                               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
                                 <Check className="w-3 h-3 text-emerald-600" /> Cleared
                               </span>
-                            ) : (
+                            ) : dueState.badge === 'In Progress' ? (
                               <button
-                                onClick={() => handleToggleVehicleAvailability(r)}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-2xs ${
-                                  isVehicleUnavailable
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-                                }`}
-                                title={isVehicleUnavailable ? 'Restore to Available' : 'Mark vehicle status to Unavailable'}
+                                onClick={() => handleCompleteService(r)}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                title="Complete work order & restore vehicle to Available"
                               >
-                                {isVehicleUnavailable ? 'Restore Available' : 'Pull From Intake'}
+                                <CheckCircle2 className="w-3 h-3" /> Complete
                               </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleStartService(r)}
+                                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                  title="Start service in workshop bay"
+                                >
+                                  <Wrench className="w-3 h-3" /> Start
+                                </button>
+                                <button
+                                  onClick={() => handleToggleVehicleAvailability(r)}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-2xs ${
+                                    isVehicleUnavailable
+                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                  }`}
+                                  title={isVehicleUnavailable ? 'Restore to Available' : 'Mark vehicle status to Maintenance'}
+                                >
+                                  {isVehicleUnavailable ? 'Restore' : 'Pull'}
+                                </button>
+                              </>
                             )}
                           </Can>
 
@@ -833,15 +1011,18 @@ export default function MaintenancePage() {
       )}
 
       {/* Maintenance Modal */}
-      <MaintenanceModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingRecord(null);
-        }}
-        onSave={handleSaveRecord}
-        record={editingRecord}
-      />
+      {isModalOpen && (
+        <MaintenanceModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingRecord(null);
+          }}
+          onSave={handleSaveRecord}
+          record={editingRecord}
+          vendors={vendors}
+        />
+      )}
 
       {/* Invoice Preview Modal */}
       {viewingInvoice && (
@@ -890,7 +1071,7 @@ export default function MaintenancePage() {
         onConfirm={handleDeleteRecord}
         title="Delete Maintenance Record"
         message={`Are you sure you want to delete maintenance record ${deletingRecord?.id} for ${deletingRecord?.vehicle}?`}
-        confirmText="Delete Record"
+        confirmText={isSubmitting ? 'Deleting...' : 'Delete Record'}
       />
     </div>
   );

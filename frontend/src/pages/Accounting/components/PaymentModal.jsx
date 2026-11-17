@@ -23,32 +23,33 @@ export default function PaymentModal({
     referenceNumber: '',
     status: 'Paid',
     amount: '',
-    notes: 'Commercial lease remittance received.'
+    notes: ''
   });
 
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (isOpen) {
-      const randomRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
-      const selectedDriver = initialDriver || (drivers[0]?.name || '');
+      const selectedDriver = initialDriver || '';
       // Find active rental for driver if any
-      const matchingRental = rentals.find((r) => r.driver === selectedDriver || r.customer === selectedDriver);
+      const matchingRental = selectedDriver
+        ? rentals.find((r) => r.driver === selectedDriver || r.customer === selectedDriver || r.driverName === selectedDriver)
+        : null;
 
       setFormData({
         driver: selectedDriver,
-        rental: matchingRental ? matchingRental.id : (rentals[0]?.id || 'RNT-2024-089'),
+        rental: matchingRental ? (matchingRental.contract_no || matchingRental.id) : '',
         date: todayStr,
         dueDate: todayStr,
         method: 'Corporate ACH',
-        referenceNumber: randomRef,
+        referenceNumber: '',
         status: 'Paid',
-        amount: '487.50',
-        notes: 'Commercial lease remittance received.'
+        amount: '',
+        notes: ''
       });
       setErrors({});
     }
-  }, [isOpen, initialDriver, drivers, rentals, todayStr]);
+  }, [isOpen, initialDriver, rentals, todayStr]);
 
   if (!isOpen) return null;
 
@@ -62,11 +63,11 @@ export default function PaymentModal({
 
   const handleDriverSelect = (e) => {
     const dName = e.target.value;
-    const matchingRental = rentals.find((r) => r.driver === dName || r.customer === dName);
+    const matchingRental = rentals.find((r) => r.driver === dName || r.customer === dName || r.driverName === dName);
     setFormData((prev) => ({
       ...prev,
       driver: dName,
-      rental: matchingRental ? matchingRental.id : prev.rental
+      rental: matchingRental ? (matchingRental.contract_no || matchingRental.id) : prev.rental
     }));
   };
 
@@ -186,7 +187,7 @@ export default function PaymentModal({
             step="0.01"
             value={formData.amount}
             onChange={handleChange}
-            placeholder="487.50"
+            placeholder="0.00"
             required
             error={errors.amount}
           />

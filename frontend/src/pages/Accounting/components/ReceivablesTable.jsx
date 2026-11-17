@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Clock,
   Download,
@@ -20,69 +20,61 @@ export default function ReceivablesTable({
 }) {
   const [agingFilter, setAgingFilter] = useState('All');
 
-  // Derive open AR items from pending / overdue invoices and charges
-  const openItems = [
-    {
-      id: 'AR-INV-004',
-      refType: 'Invoice',
-      docId: 'INV-2025-004',
-      debtor: 'Skyline Transport Co',
-      vehicle: 'Hyundai Sonata SEL (PR-2024-HS)',
-      issueDate: '2025-06-20',
-      dueDate: '2025-07-05',
-      daysOverdue: 22,
-      originalAmount: 1566,
-      openBalance: 1566,
-      agingBucket: '31-60 Days',
-      status: 'Overdue',
-      collectionStage: 'Escalated - Final Demand Notice'
-    },
-    {
-      id: 'AR-INV-003',
-      refType: 'Invoice',
-      docId: 'INV-2025-003',
-      debtor: 'GreenEnergy Tech Corp',
-      vehicle: 'Tesla Model 3 (PR-2024-TM)',
-      issueDate: '2025-07-10',
-      dueDate: '2025-07-25',
-      daysOverdue: 0,
-      originalAmount: 1898,
-      openBalance: 1898,
-      agingBucket: 'Current (0-30)',
-      status: 'Pending',
-      collectionStage: 'On Schedule - Net 15'
-    },
-    {
-      id: 'AR-CHG-004',
-      refType: 'Charge',
-      docId: 'CHG-004',
-      debtor: 'Alexander Reed',
-      vehicle: 'Tesla Model 3 (PR-2024-TM)',
-      issueDate: '2025-07-10',
-      dueDate: '2025-07-10',
-      daysOverdue: 17,
-      originalAmount: 462.50,
-      openBalance: 212.50,
-      agingBucket: 'Current (0-30)',
-      status: 'Partial',
-      collectionStage: 'Partial Paid ($250 remitted)'
-    },
-    {
-      id: 'AR-CHG-005',
-      refType: 'Violation',
-      docId: 'CHG-005',
-      debtor: 'Sarah Jenkins',
-      vehicle: 'Hyundai Sonata (PR-2024-HS)',
-      issueDate: '2025-07-04',
-      dueDate: '2025-07-14',
-      daysOverdue: 13,
-      originalAmount: 90,
-      openBalance: 75,
-      agingBucket: 'Current (0-30)',
-      status: 'Overdue',
-      collectionStage: 'Toll Deduction Scheduled'
-    }
-  ];
+  // Derive open AR items dynamically from live invoices & charges
+  const openItems = useMemo(() => {
+    const list = [];
+
+    // 1. Outstanding Invoices
+    invoices.forEach((inv) => {
+      const balance = Number(inv.balance !== undefined ? inv.balance : (inv.total - (inv.paidAmount || 0)));
+      if (balance > 0 && inv.status !== 'Paid' && inv.status !== 'void' && inv.status !== 'Reversed') {
+        const today = new Date();
+        const due = inv.dueDate ? new Date(inv.dueDate) : today;
+        const diffDays = Math.ceil((today - due) / (1000 * 3600 * 24));
+        const daysOverdue = Math.max(0, diffDays);
+        const agingBucket = daysOverdue > 30 ? '31-60 Days' : 'Current (0-30)';
+
+        list.push({
+          id: `AR-${inv.id}`,
+          refType: 'Invoice',
+          docId: inv.invoiceNumber || inv.id,
+          debtor: inv.customer || inv.driver || 'Corporate Debtor',
+          vehicle: inv.vehicle || 'Fleet Vehicle',
+          issueDate: inv.date || inv.issueDate,
+          dueDate: inv.dueDate,
+          daysOverdue,
+          originalAmount: Number(inv.total),
+          openBalance: balance,
+          agingBucket,
+          status: inv.status,
+          collectionStage: daysOverdue > 30 ? 'Escalated - Final Demand Notice' : 'On Schedule - Net Terms'
+        });
+      }
+    });
+
+    // 2. Open Unsettled Charges
+    charges.forEach((chg) => {
+      if (chg.status === 'Posted') {
+        list.push({
+          id: `AR-${chg.id}`,
+          refType: chg.category || 'Charge',
+          docId: chg.id,
+          debtor: chg.driver || 'Driver',
+          vehicle: chg.description || 'Fleet Vehicle',
+          issueDate: chg.date,
+          dueDate: chg.date,
+          daysOverdue: 0,
+          originalAmount: Number(chg.amount),
+          openBalance: Number(chg.amount),
+          agingBucket: 'Current (0-30)',
+          status: 'Posted',
+          collectionStage: 'Pending Settlement'
+        });
+      }
+    });
+
+    return list;
+  }, [invoices, charges]);
 
   const totalAR = openItems.reduce((sum, item) => sum + item.openBalance, 0);
   const currentAR = openItems.filter((i) => i.agingBucket.includes('Current')).reduce((sum, i) => sum + i.openBalance, 0);

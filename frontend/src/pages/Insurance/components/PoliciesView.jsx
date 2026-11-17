@@ -8,15 +8,31 @@ import {
   FileCheck,
   Building,
   Edit2,
+  Trash2,
   Clock,
   Car
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
+import EmptyState from '../../../components/common/EmptyState';
 
 export default function PoliciesView({
   policies,
   onEditPolicy,
+  onDeletePolicy,
+  onAddNewPolicy
 }) {
+  if (!policies || policies.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(7,29,73,0.04)] overflow-hidden p-6">
+        <EmptyState
+          title="No fleet insurance policies found"
+          description="Your insurance policy ledger is currently clean. Click 'New Policy' above to configure your active fleet coverage."
+          actionText={onAddNewPolicy ? '+ Add First Fleet Policy' : undefined}
+          onAction={onAddNewPolicy}
+        />
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -162,13 +178,25 @@ export default function PoliciesView({
               <span className="text-[11px] text-slate-500 font-medium">
                 Covered: <strong>{p.vehiclesCovered || 'Fleet'}</strong>
               </span>
-              <button
-                onClick={() => onEditPolicy(p)}
-                className="px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                Edit Policy
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onEditPolicy(p)}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Edit Policy"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+                {onDeletePolicy && (
+                  <button
+                    onClick={() => onDeletePolicy(p)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 hover:border-rose-200 transition-all cursor-pointer"
+                    title="Delete Policy"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

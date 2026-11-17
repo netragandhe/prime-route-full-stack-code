@@ -14,8 +14,9 @@ import {
 import Modal from '../../components/common/Modal';
 import { useFleet } from '../../context/FleetContext';
 import { initialSettings } from '../../data/mockData';
+import { vendorsApi } from '../../api/vendorsApi';
 
-const SERVICE_TYPES = [
+const DEFAULT_SERVICE_TYPES = [
   'Oil Change - 5,000 miles',
   'Synthetic Oil & Filter (0W-20)',
   'Brake Service & Pad Replacement',
@@ -28,45 +29,60 @@ const SERVICE_TYPES = [
   'Engine Tune-up & Spark Plugs'
 ];
 
-const SERVICE_PROVIDERS = [
-  'QuickLube Express Center',
-  'Speedy Pro Auto Clinic',
-  'Chevy Certified Service Hub',
-  'Goodyear Commercial Fleet Hub',
-  'Metro Ford Fleet Works',
-  'Tesla Authorized Service Center',
-  'Bimmer Motors VIP Workshop'
-];
-
 export default function MaintenanceModal({
   isOpen,
   onClose,
   onSave,
-  record = null
+  record = null,
+  vendors: propVendors = []
 }) {
   const { vehicles = [] } = useFleet();
+  const [liveVendors, setLiveVendors] = useState(propVendors);
   const isEditing = !!record;
+
+  // Fetch approved vendors if not provided
+  useEffect(() => {
+    if (propVendors && propVendors.length > 0) {
+      setLiveVendors(propVendors);
+    } else if (isOpen) {
+      vendorsApi.getVendors().then((res) => {
+        if (res && res.vendors) {
+          setLiveVendors(res.vendors);
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen, propVendors]);
 
   // Requirement 5: Default oil change interval 5,000 miles (configurable value read from settings)
   const defaultOilChangeInterval =
     initialSettings?.maintenanceIntervals?.oilChangeMiles || 5000;
 
+  const availableProviders = liveVendors.length > 0
+    ? liveVendors.map((v) => v.name)
+    : [
+        'Jiffy Lube Fleet Maintenance',
+        'Bridgestone Commercial Tire Centers',
+        'CleanCar Express Fleet Detailing',
+        'Speedy Pro Auto Clinic',
+        'QuickLube Express Center'
+      ];
+
   const [formData, setFormData] = useState({
     vehicleId: '',
-    vehicle: 'Toyota Camry SE (PR-2024-TC)',
-    plate: 'PR-2024-TC',
+    vehicle: '',
+    plate: '',
     serviceDate: new Date().toISOString().split('T')[0],
-    odometer: 24500,
+    odometer: 20000,
     type: 'Oil Change - 5,000 miles',
-    provider: 'QuickLube Express Center',
-    cost: 85,
+    provider: 'Jiffy Lube Fleet Maintenance',
+    cost: '',
     invoiceUpload: null,
     invoiceFileName: '',
     invoiceFileSize: '',
-    nextServiceMileage: 29500,
+    nextServiceMileage: 25000,
     nextServiceDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     status: 'Scheduled',
-    notes: 'Includes multi-point fluid top-off and tire pressure check.'
+    notes: ''
   });
 
   const [invoicePreview, setInvoicePreview] = useState(null);
@@ -96,26 +112,27 @@ export default function MaintenanceModal({
       const firstVeh = vehicles[0];
       const odo = firstVeh?.mileage
         ? Number(String(firstVeh.mileage).replace(/[^0-9]/g, ''))
-        : 24500;
+        : 20000;
+      const initialProvider = availableProviders[0] || 'Jiffy Lube Fleet Maintenance';
 
       setFormData({
-        vehicleId: firstVeh?.id || 'VEH-001',
+        vehicleId: firstVeh?.id || '',
         vehicle: firstVeh
           ? `${firstVeh.make} ${firstVeh.model} (${firstVeh.plate || firstVeh.id})`
-          : 'Toyota Camry SE (PR-2024-TC)',
-        plate: firstVeh?.plate || 'PR-2024-TC',
+          : '',
+        plate: firstVeh?.plate || '',
         serviceDate: new Date().toISOString().split('T')[0],
         odometer: odo,
         type: 'Oil Change - 5,000 miles',
-        provider: 'QuickLube Express Center',
-        cost: 85,
+        provider: initialProvider,
+        cost: '',
         invoiceUpload: null,
         invoiceFileName: '',
         invoiceFileSize: '',
         nextServiceMileage: odo + defaultOilChangeInterval,
         nextServiceDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         status: 'Scheduled',
-        notes: 'Includes multi-point fluid top-off and tire pressure check.'
+        notes: ''
       });
       setInvoicePreview(null);
     }
@@ -264,7 +281,7 @@ export default function MaintenanceModal({
               required
             />
             <datalist id="service-types">
-              {SERVICE_TYPES.map((st) => (
+              {DEFAULT_SERVICE_TYPES.map((st) => (
                 <option key={st} value={st} />
               ))}
             </datalist>
@@ -279,12 +296,12 @@ export default function MaintenanceModal({
               list="service-providers"
               value={formData.provider}
               onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-              placeholder="e.g. Speedy Pro Auto Clinic"
+              placeholder="e.g. Jiffy Lube Fleet Maintenance"
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#075EE8]/20 focus:border-[#075EE8] font-medium"
               required
             />
             <datalist id="service-providers">
-              {SERVICE_PROVIDERS.map((sp) => (
+              {availableProviders.map((sp) => (
                 <option key={sp} value={sp} />
               ))}
             </datalist>

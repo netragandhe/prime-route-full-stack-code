@@ -1,93 +1,81 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../../../components/common/Modal';
 import { ShieldAlert, DollarSign, FileText, Wrench, Building } from 'lucide-react';
-import { initialPolicies, mockVehicles, mockDrivers } from '../../../data/mockData';
 
 export default function ClaimModal({
   isOpen,
   onClose,
   onSave,
   claim = null,
-  accidents = []
+  accidents = [],
+  policies = [],
+  vehicles = [],
+  drivers = []
 }) {
-  const [formData, setFormData] = useState({
-    claimNumber: '',
-    policyId: 'POL-TRV-101',
-    policyNumber: 'TRV-CA-9821034-25',
-    insurer: 'Travelers Commercial Auto & Marine',
-    accidentId: '',
-    incidentDate: new Date().toISOString().split('T')[0],
-    vehicle: '',
-    plate: '',
-    driver: '',
-    claimedAmount: 2500,
-    repairEstimate: 2500,
-    repairInvoice: '',
-    repairInvoiceFile: '',
-    deductibleAmount: 1000,
-    deductibleTerms: '$1,000 Collision Deductible',
-    insurancePaid: 0,
-    driverCharge: 1000,
-    amountRecovered: 0,
-    driverRecovered: 0,
-    status: 'Under Review',
-    adjusterName: '',
-    adjusterPhone: '',
-    notes: ''
-  });
+  const availablePolicies = policies.length > 0 ? policies : [];
+
+  const getInitialForm = () => {
+    const firstPol = availablePolicies[0] || {};
+    const firstAccident = accidents[0] || null;
+
+    return {
+      claimNumber: '',
+      policyId: firstPol.id || '',
+      policyNumber: firstPol.policyNumber || firstPol.policy_number || '',
+      insurer: firstPol.insurer || firstPol.insurer_name || '',
+      accidentId: firstAccident ? firstAccident.id : '',
+      incidentDate: firstAccident?.incidentDate || firstAccident?.date || new Date().toISOString().split('T')[0],
+      vehicle: firstAccident?.vehicle || (vehicles[0]?.name || `${vehicles[0]?.make || ''} ${vehicles[0]?.model || ''}`.trim()) || '',
+      plate: firstAccident?.plate || vehicles[0]?.plate || '',
+      driver: firstAccident?.driver || drivers[0]?.name || '',
+      claimedAmount: firstAccident?.repairEstimate || '',
+      repairEstimate: firstAccident?.repairEstimate || '',
+      repairInvoice: '',
+      repairInvoiceFile: '',
+      deductibleAmount: firstPol.deductible ? parseFloat(String(firstPol.deductible).replace(/[^0-9.-]+/g, '')) || 0 : '',
+      deductibleTerms: firstPol.deductibleTerms || '$1,000 Deductible',
+      insurancePaid: '',
+      driverCharge: '',
+      amountRecovered: 0,
+      driverRecovered: '',
+      status: 'Under Review',
+      adjusterName: '',
+      adjusterPhone: '',
+      notes: ''
+    };
+  };
+
+  const [formData, setFormData] = useState(getInitialForm);
 
   useEffect(() => {
     if (claim) {
       setFormData(claim);
     } else {
-      const generatedClaimNum = `CLM-TRV-${Math.floor(100000 + Math.random() * 900000)}`;
-      const pol = initialPolicies[0] || {};
-      const firstAccident = accidents[0] || {};
-
-      setFormData({
-        id: generatedClaimNum,
-        claimNumber: generatedClaimNum,
-        policyId: pol.id || 'POL-TRV-101',
-        policyNumber: pol.policyNumber || 'TRV-CA-9821034-25',
-        insurer: pol.insurer || 'Travelers Commercial Auto & Marine',
-        accidentId: firstAccident.id || 'ACC-2025-014',
-        incidentDate: firstAccident.incidentDate || new Date().toISOString().split('T')[0],
-        vehicle: firstAccident.vehicle || mockVehicles[0]?.name || 'Honda Civic EX',
-        plate: firstAccident.plate || mockVehicles[0]?.plate || 'PR-2024-HC',
-        driver: firstAccident.driver || mockDrivers[0]?.name || 'Carlos Mendez',
-        claimedAmount: firstAccident.repairEstimate || 2800,
-        repairEstimate: firstAccident.repairEstimate || 2800,
-        repairInvoice: firstAccident.repairInvoiceNumber || 'INV-SHOP-8944',
-        repairInvoiceFile: firstAccident.repairInvoiceFile || 'collision_repair_invoice.pdf',
-        deductibleAmount: firstAccident.deductibleAmount || 1000,
-        deductibleTerms: firstAccident.deductibleTerms || '$1,000 Collision Deductible',
-        insurancePaid: 0,
-        driverCharge: 1000,
-        amountRecovered: 250,
-        driverRecovered: 250,
-        status: 'Under Review',
-        adjusterName: 'Jessica Taylor (Field Adjuster)',
-        adjusterPhone: '+1 (800) 555-8728 ext. 235',
-        notes: 'Claim initiated for vehicle front collision damage; adjuster inspection pending.'
-      });
+      setFormData(getInitialForm());
     }
-  }, [claim, isOpen, accidents]);
+  }, [claim, isOpen, policies, accidents, vehicles, drivers]);
 
   const handleAccidentSelect = (accidentId) => {
-    const selected = accidents.find((a) => a.id === accidentId);
+    if (!accidentId || accidentId === 'DIRECT_CLAIM') {
+      setFormData((prev) => ({
+        ...prev,
+        accidentId: accidentId || ''
+      }));
+      return;
+    }
+
+    const selected = accidents.find((a) => String(a.id) === String(accidentId) || a.rawId === accidentId);
     if (selected) {
       setFormData((prev) => ({
         ...prev,
         accidentId: selected.id,
-        vehicle: selected.vehicle,
-        plate: selected.plate,
-        driver: selected.driver,
-        incidentDate: selected.incidentDate || selected.date,
+        vehicle: selected.vehicle || prev.vehicle,
+        plate: selected.plate || prev.plate,
+        driver: selected.driver || prev.driver,
+        incidentDate: selected.incidentDate || selected.date || prev.incidentDate,
         claimedAmount: selected.repairEstimate || prev.claimedAmount,
         repairEstimate: selected.repairEstimate || prev.repairEstimate,
-        repairInvoice: selected.repairInvoiceNumber || prev.repairInvoice,
-        deductibleAmount: selected.deductibleAmount || prev.deductibleAmount,
-        driverCharge: selected.driverCharge || prev.driverCharge
+        deductibleAmount: selected.deductibleAmount !== undefined ? selected.deductibleAmount : prev.deductibleAmount
       }));
     } else {
       setFormData((prev) => ({ ...prev, accidentId }));
@@ -95,13 +83,13 @@ export default function ClaimModal({
   };
 
   const handlePolicySelect = (policyId) => {
-    const pol = initialPolicies.find((p) => p.id === policyId);
+    const pol = availablePolicies.find((p) => String(p.id) === String(policyId) || p.policyId === policyId);
     if (pol) {
       setFormData((prev) => ({
         ...prev,
         policyId: pol.id,
-        policyNumber: pol.policyNumber,
-        insurer: pol.insurer,
+        policyNumber: pol.policyNumber || pol.policy_number,
+        insurer: pol.insurer || pol.insurer_name,
         deductibleTerms: pol.deductibleTerms || pol.deductible
       }));
     } else {
@@ -154,9 +142,9 @@ export default function ClaimModal({
                 className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white"
                 required
               >
-                {initialPolicies.map((p) => (
+                {availablePolicies.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.insurer} ({p.policyNumber})
+                    {p.insurer || p.insurer_name} ({p.policyNumber || p.policy_number})
                   </option>
                 ))}
                 <option value="Internal Escrow">Internal Escrow (Sub-threshold)</option>
@@ -180,11 +168,11 @@ export default function ClaimModal({
                   value={formData.accidentId}
                   onChange={(e) => handleAccidentSelect(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white font-bold"
-                  required
                 >
+                  <option value="">-- Direct Claim (Comprehensive / Storm / Glass / Vandalism) --</option>
                   {accidents.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.id} – {a.vehicle} ({a.incidentDate || a.date})
+                      {a.id} – {a.vehicle} {a.plate ? `(${a.plate})` : ''} ({a.incidentDate || a.date})
                     </option>
                   ))}
                 </select>
@@ -198,32 +186,93 @@ export default function ClaimModal({
                   type="date"
                   value={formData.incidentDate}
                   onChange={(e) => setFormData((p) => ({ ...p, incidentDate: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white font-bold"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Involved Vehicle & Plate
+                  Involved Fleet Vehicle *
                 </label>
-                <input
-                  type="text"
-                  value={`${formData.vehicle} (${formData.plate})`}
-                  readOnly
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-100 text-slate-700 font-semibold cursor-not-allowed"
-                />
+                {vehicles && vehicles.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={formData.vehicle}
+                      onChange={(e) => {
+                        const selected = vehicles.find((v) => (v.name || `${v.make} ${v.model}`) === e.target.value);
+                        setFormData((p) => ({
+                          ...p,
+                          vehicle: e.target.value,
+                          plate: selected ? selected.plate : p.plate
+                        }));
+                      }}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                      required
+                    >
+                      <option value="">-- Select Vehicle --</option>
+                      {vehicles.map((v) => (
+                        <option key={v.id} value={v.name || `${v.make} ${v.model}`}>
+                          {v.name || `${v.make} ${v.model}`}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={formData.plate}
+                      onChange={(e) => setFormData((p) => ({ ...p, plate: e.target.value }))}
+                      placeholder="Plate (e.g. PR-2024-TC)"
+                      className="w-full px-3 py-2 text-xs font-mono font-bold border border-slate-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={formData.vehicle}
+                      onChange={(e) => setFormData((p) => ({ ...p, vehicle: e.target.value }))}
+                      placeholder="Vehicle (e.g. Toyota Camry)"
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={formData.plate}
+                      onChange={(e) => setFormData((p) => ({ ...p, plate: e.target.value }))}
+                      placeholder="Plate (e.g. PR-2024-TC)"
+                      className="w-full px-3 py-2 text-xs font-mono font-bold border border-slate-200 rounded-xl bg-white"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Involved Driver
                 </label>
-                <input
-                  type="text"
-                  value={formData.driver}
-                  readOnly
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-100 text-slate-700 font-semibold cursor-not-allowed"
-                />
+                {drivers && drivers.length > 0 ? (
+                  <select
+                    value={formData.driver}
+                    onChange={(e) => setFormData((p) => ({ ...p, driver: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                  >
+                    <option value="">-- Select Driver (Optional) --</option>
+                    {drivers.map((d) => (
+                      <option key={d.id} value={d.name || `${d.firstName || d.first_name || ''} ${d.lastName || d.last_name || ''}`.trim()}>
+                        {d.name || `${d.firstName || d.first_name || ''} ${d.lastName || d.last_name || ''}`.trim()}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.driver}
+                    onChange={(e) => setFormData((p) => ({ ...p, driver: e.target.value }))}
+                    placeholder="e.g. Marcus Vance"
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                  />
+                )}
               </div>
             </div>
           </div>

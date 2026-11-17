@@ -137,6 +137,7 @@ async function getDashboardData({ dateRange = 'This Month (July 2025)', vehicleF
   });
 
   const topVehicles = dbVehicles.map((v, idx) => ({
+    id: Number(v.id),
     rank: idx + 1,
     name: `${v.make} ${v.model}`,
     make: v.make,

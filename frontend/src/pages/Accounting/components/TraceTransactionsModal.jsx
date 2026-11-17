@@ -20,15 +20,11 @@ export default function TraceTransactionsModal({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
 
-  if (!isOpen || !traceData) return null;
-
-  const {
-    title = 'Total Line Trace',
-    totalAmount = 0,
-    description = 'Detailed source transactions composing this metric',
-    accountCode = 'General Ledger Subledger',
-    sourceTransactions = []
-  } = traceData;
+  const title = traceData?.title || 'Total Line Trace';
+  const totalAmount = traceData?.totalAmount || 0;
+  const description = traceData?.description || 'Detailed source transactions composing this metric';
+  const accountCode = traceData?.accountCode || 'General Ledger Subledger';
+  const sourceTransactions = useMemo(() => traceData?.sourceTransactions || [], [traceData]);
 
   const filteredTransactions = useMemo(() => {
     if (!searchQuery.trim()) return sourceTransactions;
@@ -51,6 +47,8 @@ export default function TraceTransactionsModal({
       0
     );
   }, [filteredTransactions]);
+
+  if (!isOpen || !traceData) return null;
 
   const handleExport = () => {
     exportToCsv(

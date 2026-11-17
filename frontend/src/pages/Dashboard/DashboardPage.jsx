@@ -15,6 +15,7 @@ import { dashboardApi } from '../../api';
 import RentalModal from '../Rentals/RentalModal';
 import ExpenseIncomeModals from '../Accounting/components/ExpenseIncomeModals';
 import MaintenanceModal from '../Maintenance/MaintenanceModal';
+import { maintenanceApi } from '../../api/maintenanceApi';
 
 import { useFleet } from '../../context/FleetContext';
 import { usePermission } from '../../auth/usePermission';
@@ -712,7 +713,12 @@ export default function DashboardPage({ onNavigate, onViewVehicle }) {
       <MaintenanceModal
         isOpen={isMaintenanceModalOpen}
         onClose={() => setIsMaintenanceModalOpen(false)}
-        onSave={(record) => {
+        onSave={async (record) => {
+          try {
+            await maintenanceApi.createMaintenanceRecord(record);
+          } catch (e) {
+            console.error('Failed to create maintenance from dashboard:', e);
+          }
           setIsMaintenanceModalOpen(false);
         }}
       />

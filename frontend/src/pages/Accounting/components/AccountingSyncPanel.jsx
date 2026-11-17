@@ -133,12 +133,96 @@ const DEFAULT_RECONCILIATION_DATA = [
   }
 ];
 
-export default function AccountingSyncPanel() {
+export default function AccountingSyncPanel({
+  charges = [],
+  payments = [],
+  deposits = [],
+  payables = []
+}) {
   const [syncStatus, setSyncStatus] = useState('Connected & In Sync');
   const [lastSyncTime, setLastSyncTime] = useState('Today at 02:45 PM');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [reconciliationRows, setReconciliationRows] = useState(DEFAULT_RECONCILIATION_DATA);
   const [notification, setNotification] = useState('');
+
+  // Dynamically map live database transactions to reconciliation items
+  const liveReconciled = React.useMemo(() => {
+    const list = [];
+    charges.slice(0, 4).forEach((c) => {
+      const isPending = c.qboRef === 'Pending Sync' || !c.qboRef;
+      list.push({
+        id: `REC-CHG-${c.id}`,
+        sourceId: c.id,
+        sourceType: c.category || 'Weekly Lease',
+        entity: c.driver,
+        sourceDate: c.date,
+        sourceAmount: c.amount,
+        qboId: isPending ? 'Pending Sync to QBO' : c.qboRef,
+        qboAccount: '4100 • Rental Operating Revenue',
+        syncDate: isPending ? 'Not synced yet' : 'Today 09:30 AM',
+        matchStatus: isPending ? 'Unmatched / Pending Sync' : 'Matched',
+        difference: isPending ? c.amount : 0
+      });
+    });
+
+    payments.slice(0, 3).forEach((p) => {
+      const isPending = p.qboRef === 'Pending Sync' || !p.qboRef;
+      list.push({
+        id: `REC-PMT-${p.id}`,
+        sourceId: p.id,
+        sourceType: `Payment (${p.method})`,
+        entity: p.driver,
+        sourceDate: p.date,
+        sourceAmount: p.amount,
+        qboId: isPending ? 'Pending Sync to QBO' : p.qboRef,
+        qboAccount: '1010 • Operating Checking (Chase)',
+        syncDate: isPending ? 'Not synced yet' : 'Today 09:35 AM',
+        matchStatus: isPending ? 'Unmatched / Pending Sync' : 'Matched',
+        difference: isPending ? p.amount : 0
+      });
+    });
+
+    deposits.slice(0, 2).forEach((d) => {
+      list.push({
+        id: `REC-DEP-${d.id}`,
+        sourceId: d.id,
+        sourceType: 'Escrow Security Deposit',
+        entity: d.driver,
+        sourceDate: d.heldDate,
+        sourceAmount: d.depositAmount,
+        qboId: `QBO-JRN-${d.id.replace(/[^0-9]/g, '')}`,
+        qboAccount: '2100 • Customer Deposits Held (Liability)',
+        syncDate: 'Today 09:40 AM',
+        matchStatus: 'Matched',
+        difference: 0
+      });
+    });
+
+    payables.slice(0, 2).forEach((pay) => {
+      list.push({
+        id: `REC-AP-${pay.id}`,
+        sourceId: pay.id,
+        sourceType: `Vendor Bill (${pay.category})`,
+        entity: pay.vendor,
+        sourceDate: pay.billDate,
+        sourceAmount: pay.amount,
+        qboId: `QBO-BILL-${pay.id.replace(/[^0-9]/g, '')}`,
+        qboAccount: '5000 • Fleet Operating OpEx',
+        syncDate: 'Today 02:00 PM',
+        matchStatus: 'Matched',
+        difference: 0
+      });
+    });
+
+    return list.length > 0 ? list : DEFAULT_RECONCILIATION_DATA;
+  }, [charges, payments, deposits, payables]);
+
+  const [reconciliationRows, setReconciliationRows] = useState(DEFAULT_RECONCILIATION_DATA);
+
+  React.useEffect(() => {
+    if (liveReconciled.length > 0) {
+      setReconciliationRows(liveReconciled);
+    }
+  }, [liveReconciled]);
 
   const unsyncedCount = reconciliationRows.filter((r) => r.matchStatus !== 'Matched').length;
 
