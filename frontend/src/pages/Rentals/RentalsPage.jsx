@@ -247,6 +247,11 @@ export default function RentalsPage() {
           subtitle="All Records"
           progress={100}
           progressColor="bg-[#075EE8]"
+          onClick={() => {
+            setStatusFilter('All');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'All' ? 'ring-2 ring-[#075EE8]/40 border-blue-200' : ''}
         />
         <StatCard
           title="Active Leases"
@@ -259,6 +264,11 @@ export default function RentalsPage() {
           subtitle="Vehicles on Duty"
           progress={Math.round((stats.active / (stats.total || 1)) * 100)}
           progressColor="bg-blue-600"
+          onClick={() => {
+            setStatusFilter('Active');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Active' ? 'ring-2 ring-blue-500/40 border-blue-200' : ''}
         />
         <StatCard
           title="Awaiting Signature"
@@ -271,6 +281,11 @@ export default function RentalsPage() {
           subtitle="Drafts out for Sign"
           progress={Math.round((stats.awaiting / (stats.total || 1)) * 100)}
           progressColor="bg-amber-500"
+          onClick={() => {
+            setStatusFilter('Awaiting Signature');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Awaiting Signature' ? 'ring-2 ring-amber-500/40 border-amber-200' : ''}
         />
         <StatCard
           title="Renewed / Extended"
@@ -283,6 +298,11 @@ export default function RentalsPage() {
           subtitle="Contract Renewals"
           progress={Math.round((stats.renewed / (stats.total || 1)) * 100)}
           progressColor="bg-purple-500"
+          onClick={() => {
+            setStatusFilter('Renewed');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Renewed' ? 'ring-2 ring-purple-500/40 border-purple-200' : ''}
         />
         <StatCard
           title="Completed"
@@ -295,6 +315,11 @@ export default function RentalsPage() {
           subtitle="Returned Clean"
           progress={Math.round((stats.completed / (stats.total || 1)) * 100)}
           progressColor="bg-emerald-500"
+          onClick={() => {
+            setStatusFilter('Completed');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Completed' ? 'ring-2 ring-emerald-500/40 border-emerald-200' : ''}
         />
         <StatCard
           title="Draft Agreements"
@@ -307,6 +332,11 @@ export default function RentalsPage() {
           subtitle="Awaiting Dispatch"
           progress={Math.round((stats.draft / (stats.total || 1)) * 100)}
           progressColor="bg-slate-400"
+          onClick={() => {
+            setStatusFilter('Draft');
+            setCurrentPage(1);
+          }}
+          className={statusFilter === 'Draft' ? 'ring-2 ring-slate-400/40 border-slate-300' : ''}
         />
       </div>
 
@@ -374,8 +404,14 @@ export default function RentalsPage() {
       {/* Main View Mode: Table vs Calendar */}
       {viewMode === 'calendar' ? (
         <RentalsCalendarView
-          rentals={filteredRentals}
+          rentals={rentals}
           vehicles={vehicles}
+          searchQuery={searchQuery}
+          selectedStatusFilter={statusFilter}
+          onSelectStatusFilter={(status) => {
+            setStatusFilter(status);
+            setCurrentPage(1);
+          }}
           onSelectRental={(rental) => setViewingRental(rental)}
           onViewAgreement={(rental) => setSigningRental(rental)}
         />
